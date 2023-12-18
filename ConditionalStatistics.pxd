@@ -36,7 +36,7 @@ cdef class SpectraStatistics:
         double [:] wavenumbers
         double [:] kx
         double [:] ky
-        cdef ParallelMPI.Pencil X_Pencil, Y_Pencil
+        cdef ParallelMPI.Pencil X_Pencil, Y_Pencil, Z_Pencil
 
 
     cpdef stats_io(self, Grid.Grid Gr, ReferenceState.ReferenceState RS, PrognosticVariables.PrognosticVariables PV,
@@ -54,7 +54,7 @@ cdef class SpectraStatistics2d:
         double dk
         double [:] wavenumbers
         double [:] kx
-        cdef ParallelMPI.Pencil X_Pencil
+        cdef ParallelMPI.Pencil X_Pencil, Z_Pencil
 
 
     cpdef stats_io(self, Grid.Grid Gr, ReferenceState.ReferenceState RS, PrognosticVariables.PrognosticVariables PV,

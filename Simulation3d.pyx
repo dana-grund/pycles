@@ -322,5 +322,4 @@ class Simulation3d:
         return
 
     def postprocess(self):        
-        # self.PP.combine3d()
         self.PP.combine3d(self.Pa)

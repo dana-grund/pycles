@@ -39,6 +39,8 @@ cdef class ConditionalStatistics:
         #Build list of twodimensional statistics class instances
         if 'Spectra' in conditional_statistics:
             self.CondStatsClasses.append(SpectraStatistics(Gr,PV, DV, NC, Pa))
+        if 'Spectra2d' in conditional_statistics:
+            self.CondStatsClasses.append(SpectraStatistics2d(Gr,PV, DV, NC, Pa))
         if 'Null' in conditional_statistics:
             self.CondStatsClasses.append(NullCondStats())
 
@@ -393,11 +395,12 @@ cdef class SpectraStatistics2d:
                  NetCDFIO_CondStats NC, ParallelMPI.ParallelMPI Pa):
 
         cdef:
-            Py_ssize_t ii, i,  jj, j
-            double xi, yj
+            Py_ssize_t ii, i
+            double xi
 
         # Set up the wavenumber vectors
-        self.nwave = int( np.ceil(np.sqrt(2.0) * (Gr.dims.n[0] + 1.0) * 0.5 ) + 1.0)
+        self.nwave = int(np.floor(Gr.dims.n[0] / 2))
+        # self.nwave = int( np.ceil(np.sqrt(2.0) * (Gr.dims.n[0] + 1.0) * 0.5 ) + 1.0)
         self.dk = 2.0 * pi/(Gr.dims.n[0]*Gr.dims.dx[0])
         self.wavenumbers = np.arange(self.nwave, dtype=np.double) * self.dk
 
@@ -417,7 +420,6 @@ cdef class SpectraStatistics2d:
         # set up the names of the variables
         NC.add_condstat('energy_spectrum', 'spectra2d', 'wavenumber', Gr, Pa)
         NC.add_condstat('energy_spectrum_u', 'spectra2d', 'wavenumber', Gr, Pa)
-        #NC.add_condstat('energy_spectrum_v', 'spectra2d', 'wavenumber', Gr, Pa)
         NC.add_condstat('energy_spectrum_w', 'spectra2d', 'wavenumber', Gr, Pa)
         if 's' in PV.name_index:
             NC.add_condstat('s_spectrum', 'spectra2d', 'wavenumber', Gr, Pa)
@@ -457,21 +459,20 @@ cdef class SpectraStatistics2d:
 
 
         cdef:
-            Py_ssize_t i, j, k,  ijk, var_shift
+            Py_ssize_t i, j, k, ijk, var_shift
             Py_ssize_t istride = Gr.dims.nlg[1] * Gr.dims.nlg[2]
             Py_ssize_t jstride = Gr.dims.nlg[2]
             Py_ssize_t ishift
             Py_ssize_t jshift
             Py_ssize_t u_shift = PV.get_varshift(Gr, 'u')
             Py_ssize_t w_shift = PV.get_varshift(Gr, 'w')
-            complex [:] data_fft= np.zeros(Gr.dims.npg,dtype=np.cdouble,order='c')
+            complex [:] data_fft = np.zeros(Gr.dims.npg,dtype=np.cdouble,order='c')
             complex [:] data_fft_s= np.zeros(Gr.dims.npg,dtype=np.cdouble,order='c')
             double [:] uc = np.zeros(Gr.dims.npg,dtype=np.double,order='c')
             double [:] wc = np.zeros(Gr.dims.npg,dtype=np.double,order='c')
             Py_ssize_t npg = Gr.dims.npg
             Py_ssize_t gw = Gr.dims.gw
-            double [:,:,:] spec_u, spec_w, spec # new y dimension to average
-
+            double [:,:] spec_u, spec_w, spec
 
 
 
@@ -553,7 +554,6 @@ cdef class SpectraStatistics2d:
             NC.write_condstat('covar_spectrum', 'spectra2d', spec[:,:], Pa)
 
 
-
         return
 
     cpdef forward_transform(self, Grid.Grid Gr,ParallelMPI.ParallelMPI Pa, double [:] data, complex [:] data_fft):
@@ -567,8 +567,6 @@ cdef class SpectraStatistics2d:
         self.X_Pencil.reverse_complex(&Gr.dims, Pa, x_pencil_fft, &data_fft[0])
 
         return
-
-
 
     cpdef fluctuation_forward_transform(self, Grid.Grid Gr,ParallelMPI.ParallelMPI Pa, double [:] data, complex [:] data_fft):
         cdef:
@@ -603,10 +601,6 @@ cdef class SpectraStatistics2d:
 
         return
 
-
-
-
-
     cpdef compute_spectrum(self, Grid.Grid Gr, ParallelMPI.ParallelMPI Pa, complex [:] data_fft ):
         cdef:
             Py_ssize_t i, j, k, ijk, ik, kg, ishift, jshift
@@ -615,10 +609,11 @@ cdef class SpectraStatistics2d:
             Py_ssize_t gw = Gr.dims.gw
             Py_ssize_t nwave = self.nwave
             double [:] kx = self.kx
-            double [:] ky = self.ky
             double dk = self.dk
             double kmag
             double [:,:] spec = np.zeros((Gr.dims.nl[2],self.nwave),dtype=np.double, order ='c')
+            #int half_y = int(Gr.dims.nl[1]/2)
+            #double [:,:] ix_kx_ik  = np.zeros((Gr.dims.nl[0],3),dtype=np.double, order ='c')
 
         with nogil:
             for i in xrange(Gr.dims.nl[0]):
@@ -628,14 +623,19 @@ cdef class SpectraStatistics2d:
                 ik = int(ceil(kmag/dk + 0.5) - 1.0)
                 for j in xrange(Gr.dims.nl[1]):
                     jshift = (j + gw) * jstride
+                    #if j == half_y: # half y
                     for k in xrange(Gr.dims.nl[2]):
                         kg = k + gw
                         ijk = ishift + jshift + kg
-                        spec[k, ik] += data_fft[ijk].real *  data_fft[ijk].real +  data_fft[ijk].imag *  data_fft[ijk].imag
+                        #spec[k, ik] += data_fft[ijk].real *  data_fft[ijk].real +  data_fft[ijk].imag *  data_fft[ijk].imag
+                        spec[k, ik] += (data_fft[ijk].real *  data_fft[ijk].real +  data_fft[ijk].imag *  data_fft[ijk].imag) / Gr.dims.nl[1]
+                        #ix_kx_ik[i,0] = i
+                        #ix_kx_ik[i,1] = kx[i]
+                        #ix_kx_ik[i,2] = ik
+
                         # the fft does not include scaling -> divide by (N-1)
-            spec[:,:] /= Gr.dims.nl[1]
-            # averaging over y
-            # assumption: nprocy=1 (ny is small anyways)
+                        # averaging over y (assumption: nprocy=1, as ny is small anyways)
+        #Pa.root_print(ix_kx_ik)
             
         for k in xrange(Gr.dims.nl[2]):
             for ik in xrange(nwave):
@@ -643,12 +643,7 @@ cdef class SpectraStatistics2d:
                 # this sum is supposed to be an integral -> divide by square of total number of k (self.nwave)
                 # to agree with SP11, also divide by dk = 2 pi / Lx
 
-
-
         return spec
-
-
-
 
     cpdef compute_cospectrum(self, Grid.Grid Gr, ParallelMPI.ParallelMPI Pa, complex [:] data_fft_1,  complex [:] data_fft_2):
         cdef:
@@ -658,7 +653,6 @@ cdef class SpectraStatistics2d:
             Py_ssize_t gw = Gr.dims.gw
             Py_ssize_t nwave = self.nwave
             double [:] kx = self.kx
-            double [:] ky = self.ky
             double dk = self.dk
             double kmag, R1, R2
             double [:,:] spec = np.zeros((Gr.dims.nl[2],self.nwave),dtype=np.double, order ='c')
@@ -666,16 +660,16 @@ cdef class SpectraStatistics2d:
         with nogil:
             for i in xrange(Gr.dims.nl[0]):
                 ishift = (i + gw) * istride
+                kmag = sqrt(kx[i]*kx[i])
+                ik = int(ceil(kmag/dk + 0.5) - 1.0)
                 for j in xrange(Gr.dims.nl[1]):
                     jshift = (j + gw) * jstride
-                    kmag = sqrt(kx[i]*kx[i] + ky[j]*ky[j])
-                    ik = int(ceil(kmag/dk + 0.5) - 1.0)
                     for k in xrange(Gr.dims.nl[2]):
                         kg = k + gw
                         ijk = ishift + jshift + kg
                         R1 = sqrt(data_fft_1[ijk].real *  data_fft_1[ijk].real +  data_fft_1[ijk].imag *  data_fft_1[ijk].imag)
                         R2 = sqrt(data_fft_2[ijk].real *  data_fft_2[ijk].real +  data_fft_2[ijk].imag *  data_fft_2[ijk].imag)
-                        spec[k, ik] += R1*R2
+                        spec[k, ik] += (R1*R2) / Gr.dims.nl[1]
 
         for k in xrange(Gr.dims.nl[2]):
             for ik in xrange(nwave):
