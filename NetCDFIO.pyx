@@ -496,7 +496,7 @@ cdef class NetCDFIO_CondStats:
     cpdef create_condstats_group(self, str groupname, str dimname, double [:] dimval, Grid.Grid Gr, ParallelMPI.ParallelMPI Pa):
 
         if Pa.rank == 0:
-            root_grp = nc.Dataset(self.path_plus_file, 'w', format='NETCDF4')
+            root_grp = nc.Dataset(self.path_plus_file, 'r+', format='NETCDF4')
             sub_grp = root_grp.createGroup(groupname)
             sub_grp.createDimension('z', Gr.dims.n[2])
             sub_grp.createDimension(dimname, len(dimval))

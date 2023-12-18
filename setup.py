@@ -27,10 +27,10 @@ def get_netcdf_prefix():
 conda_root = os.environ.get('CONDA_DEFAULT_ENV')
 print(f'[setup.py] {conda_root=}')
 if conda_root:
-    # Compile flags for conda env (implemented on ch4 at IAC-ETHZ)
+    # Compile flags for conda env (implemented on nitrogen at IAC-ETHZ)
     assert conda_root, "no active conda env"  # SR/TMP
     conda_lib = conda_root + '/lib'
-    conda_include = conda_root + '/include'
+    conda_include = '/home/dgrund/.conda/envs/' + conda_root + '/include'
     library_dirs = [conda_lib]
     #+library_dirs = os.environ['LD_LIBRARY_PATH'].split(':')
     libraries = []
