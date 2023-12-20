@@ -74,23 +74,6 @@ def InitStableBubble(namelist, Grid.Grid Gr,PrognosticVariables.PrognosticVariab
 
     RS.initialize(Gr, Th, NS, Pa)
 
-    #Assert kwargs are specified
-    try:
-        namelist['Straka']
-        namelist['Straka']['amplitude']
-        namelist['Straka']['x_r']
-        namelist['Straka']['z_r']
-        namelist['Straka']['z_c']
-        Straka_kwargs = namelist['Straka']
-        print('Using specified initial condition.')
-    except: # default values
-        Straka_kwargs = {}
-        Straka_kwargs['amplitude'] = 15.0 # [C]
-        Straka_kwargs['x_r'] = 4.0 # [km]
-        Straka_kwargs['z_r'] = 2.0 # [km]
-        Straka_kwargs['z_c'] = 3.0 # [km]
-        print('Using default initial condition.')
-
     cdef:
         #Get the variable number for each of the velocity components
         Py_ssize_t u_varshift = PV.get_varshift(Gr,'u')
@@ -104,13 +87,13 @@ def InitStableBubble(namelist, Grid.Grid Gr,PrognosticVariables.PrognosticVariab
         double dist
 
         #Get shape of the initial perturbation
-        double a =  float(Straka_kwargs['amplitude'])
-        double x_r = float(Straka_kwargs['x_r'])
-        double z_r = float(Straka_kwargs['z_r'])
-        double z_c = float(Straka_kwargs['z_c'])
+        double a =  15.0
+        double x_r = 4.0
+        double z_r = 2.0
+        double z_c = 3.0
         double x_c = 25.6
 
-    print('Straka initial condition kwargs: ',Straka_kwargs)
+    print(a,x_r,x_c,z_r,z_c)
 
     t_min = 9999.9
     for i in xrange(Gr.dims.nlg[0]):
