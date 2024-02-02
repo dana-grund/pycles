@@ -17,6 +17,7 @@ cdef class PostProcessing:
         bint collapse_y
         bint half_x
         bint only_T_anomaly
+        bint skip_vels
 
     cpdef initialize(self, namelist)
     cpdef combine3d(self, ParallelMPI.ParallelMPI Pa, ReferenceState.ReferenceState Ref)

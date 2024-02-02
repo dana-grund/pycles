@@ -40,6 +40,10 @@ cdef class PostProcessing:
             self.only_T_anomaly = True
         else:
             self.only_T_anomaly = False
+        if namelist['postprocessing']['skip_vels']:
+            self.skip_vels = True
+        else:
+            self.skip_vels = False
         return
 
     
@@ -152,6 +156,11 @@ cdef class PostProcessing:
         if self.collapse_y:
             ds = ds.isel(y=ny//2)
             ds = ds.drop_vars(["y","v"])
+
+        if self.skip_vels:
+            for var in ["u","v","w"]:
+                if var in list(ds.variables.keys()):
+                    ds = ds.drop_vars([var])
 
         if self.only_T_anomaly:
             T0 = Ref.temperature0_unghosted
