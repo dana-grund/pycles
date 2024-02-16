@@ -12,7 +12,7 @@ from AuxiliaryStatistics import AuxiliaryStatistics
 from ConditionalStatistics import ConditionalStatistics
 from Thermodynamics cimport LatentHeat
 from Tracers import TracersFactory
-from PostProcessing import PostProcessing # XXX
+from PostProcessing import PostProcessing
 cimport ParallelMPI
 cimport Grid
 cimport PrognosticVariables
@@ -116,7 +116,7 @@ class Simulation3d:
             self.TS.t = self.Restart.restart_data['TS']['t']
             self.TS.dt = self.Restart.restart_data['TS']['dt']
             self.Ref.init_from_restart(self.Gr, self.Restart)
-            self.PV.init_from_restart(self.Gr, self.Restart)
+            self.PV.init_from_restart(self.Gr, self.Restart, self.Pa)
             self.Sur.init_from_restart(self.Restart)
             self.StatsIO.last_output_time = self.Restart.restart_data['last_stats_output']
             self.CondStatsIO.last_output_time = self.Restart.restart_data['last_condstats_output']
@@ -154,8 +154,8 @@ class Simulation3d:
         self.Ra.initialize_profiles(self.Gr, self.Ref, self.Th, self.DV, self.Sur, self.Pa)
 
         #Do IO if not a restarted run
-        if not self.Restart.is_restart_run:
-            self.force_io()
+        # if not self.Restart.is_restart_run:
+        self.force_io()
 
         while (self.TS.t < self.TS.t_max):
             time1 = time.time()
@@ -269,7 +269,7 @@ class Simulation3d:
                 self.VO.write(self.Gr, self.Ref, self.PV, self.DV, self.Pa)
 
 
-            if self.Restart.last_restart_time + self.Restart.frequency == self.TS.t:
+            if self.Restart.output and self.Restart.last_restart_time + self.Restart.frequency == self.TS.t:
                 self.Pa.root_print('Dumping Restart Files!')
                 self.Restart.last_restart_time = self.TS.t
                 self.Restart.restart_data['last_stats_output'] = self.StatsIO.last_output_time
@@ -322,5 +322,4 @@ class Simulation3d:
         return
 
     def postprocess(self):        
-        # self.PP.combine3d()
-        self.PP.combine3d(self.Pa)
+        self.PP.combine3d(self.Pa, self.Ref)

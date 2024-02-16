@@ -12,6 +12,7 @@ import shutil
 import numpy as np
 cimport numpy as np
 cimport ParallelMPI
+cimport ReferenceState
 
 cdef class PostProcessing:
 
@@ -20,41 +21,61 @@ cdef class PostProcessing:
 
     cpdef initialize(self, namelist):
         uuid = str(namelist['meta']['uuid'])
-        out_path = str(os.path.join(namelist['output']['output_root'] + 'Output.' + namelist['meta']['simname'] + '.' + uuid[-5:])) 
-        self.out_path = out_path
-        self.fields_path = str(os.path.join(out_path, namelist['fields_io']['fields_dir'])) # see NetCDFIO.pyx
+        out_dir = str(os.path.join(namelist['output']['output_root'] + 'Output.' + namelist['meta']['simname'] + '.' + uuid[-5:])) 
+        self.out_dir = out_dir
+        self.fields_dir = str(os.path.join(out_dir, namelist['fields_io']['fields_dir']))
+        stats_dir = str(os.path.join(out_dir, namelist['stats_io']['stats_dir']))
+        self.stats_file = os.path.join(stats_dir,'Stats.'+namelist['meta']['simname']+'.nc')
         self.gridsize = [namelist["grid"]["nx"], namelist["grid"]["ny"], namelist["grid"]["nz"]]
         self.gridspacing = [namelist["grid"]["dx"], namelist["grid"]["dy"], namelist["grid"]["dz"]]
+        if namelist['postprocessing']['collapse_y']:
+            self.collapse_y = True
+        else:
+            self.collapse_y = False
+        if namelist['postprocessing']['half_x']:
+            self.half_x = True
+        else:
+            self.half_x = False
+        if namelist['postprocessing']['only_T_anomaly']:
+            self.only_T_anomaly = True
+        else:
+            self.only_T_anomaly = False
+        if namelist['postprocessing']['skip_vels']:
+            self.skip_vels = True
+        else:
+            self.skip_vels = False
         return
 
     
-    cpdef combine3d(self, ParallelMPI.ParallelMPI Pa):
-    # cpdef combine3d(self):
+    cpdef combine3d(self, ParallelMPI.ParallelMPI Pa, ReferenceState.ReferenceState Ref):
         '''
-        Before: every time step is a directory with .nc files for each rank (i.e. processor)
-        After: every time step is one .nc file
+        Before: 
+            every time step is a directory with .nc files for each rank (i.e. processor)
+            and data is stored as 1D arrays
+        After: 
+            every time step is one .nc file
+            and data is stored as 3D arrays
         '''
         
-        Pa.barrier() # wait for all to finish
-
-        if Pa.rank == 0: # MPI: do only in one of the processes. Make sure it has enough memory?
+        Pa.barrier()
+        if Pa.rank == 0:
         
             nx, ny, nz = self.gridsize
 
-            fields_path = self.fields_path
-            out_path = self.out_path
+            fields_dir = self.fields_dir
+            out_dir = self.out_dir
 
-            directories = os.listdir(fields_path)
+            directories = os.listdir(fields_dir)
             print('\nBeginning combination of ranks in time step directories', directories)
 
             for d in directories:
-                d_path = os.path.join(fields_path, d)
+                d_path = os.path.join(fields_dir, d)
                 ranks = os.listdir(d_path)
 
                 print(f'\t Combining ranks {ranks} of time step (dir) {d}')
 
-                file_path = os.path.join(fields_path, d, ranks[0])
-                save_path = os.path.join(out_path,'fields/', str(d) + '.nc')
+                file_path = os.path.join(fields_dir, d, ranks[0])
+                save_path = os.path.join(out_dir,'fields/', str(d) + '.nc')
                 with xr.open_dataset(file_path, group='fields') as ds:
                     field_keys = ds.variables
 
@@ -66,7 +87,7 @@ cdef class PostProcessing:
 
                     for r in ranks:
                         if r[-3:] == '.nc':
-                            file_path = os.path.join(fields_path, d, r)
+                            file_path = os.path.join(fields_dir, d, r)
 
                             with xr.open_dataset(file_path, group='fields') as ds:
                                 f_data = ds[f].values # to_numpy()
@@ -86,11 +107,10 @@ cdef class PostProcessing:
                                 f_data, nl_0, nl_1, nl_2, indx_lo_0, indx_lo_1, indx_lo_2, f_data_3d
                             )
 
-                            variables_to_save[f] = (('x','y','z','t'), np.expand_dims(f_data_3d, axis=3)) # adding one dim for time
+                            variables_to_save[f] = (('x','y','z','t'), np.expand_dims(f_data_3d, axis=3))
 
-                self.save_timestep(save_path, variables_to_save, d)
-                
-                # clean up
+                # save the new file instead of the old directory
+                self.save_timestep(save_path, variables_to_save, d, Ref)
                 shutil.rmtree(d_path)
 
             print('Finished combining ranks per time step.\n')
@@ -118,8 +138,8 @@ cdef class PostProcessing:
                             indx_lo_0 + i, indx_lo_1 + j, indx_lo_2 + k] = f_data[ijk]
                             
 
-    cpdef save_timestep(self, fname, variables, time):
-        
+    cpdef save_timestep(self, fname, variables, time, ReferenceState.ReferenceState Ref):
+
         nx, ny, nz = self.gridsize
         dx, dy, dz = self.gridspacing
         
@@ -132,4 +152,24 @@ cdef class PostProcessing:
 
         ds = xr.Dataset(variables, coords=coords)
         ds = ds.sortby('t')
+
+        if self.collapse_y:
+            ds = ds.isel(y=ny//2)
+            ds = ds.drop_vars(["y","v"])
+
+        if self.skip_vels:
+            for var in ["u","v","w"]:
+                if var in list(ds.variables.keys()):
+                    ds = ds.drop_vars([var])
+
+        if self.only_T_anomaly:
+            T0 = Ref.temperature0_unghosted
+            T0 = np.expand_dims(np.ones((nx,nz))*T0,axis=-1)
+            ds['temperature_anomaly'] = ds['temperature'] - T0
+            ds = ds.drop_vars(["temperature","s"])        
+        
+        if self.half_x:
+            half_x = nx//2 +1*(nx%2==1)
+            ds = ds.isel(x=slice(0,half_x))
+
         ds.to_netcdf(fname)

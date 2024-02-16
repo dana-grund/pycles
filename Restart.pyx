@@ -22,6 +22,11 @@ cdef class Restart:
         '''
 
         self.uuid = str(namelist['meta']['uuid'])
+        
+        if namelist['restart']['output']:
+            self.output = True
+        else:
+            self.output = False
 
         try:
             outpath = str(os.path.join(str(namelist['output']['output_root'])
@@ -75,8 +80,12 @@ cdef class Restart:
         except:
             Pa.root_print('Not a restarted simulation.')
 
-
-
+        try:
+            self.PV_seed = namelist['restart']['PV_seed']
+            self.PV_max_pert = namelist['restart']['PV_max_pert']
+        except:
+            self.PV_seed = 1
+            self.PV_max_pert = 0
 
         return
 
