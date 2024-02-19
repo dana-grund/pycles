@@ -201,6 +201,7 @@ class Simulation3d:
             double min_dt = 0.0
 
         if self.TS.t > 0 and self.TS.rk_step == self.TS.n_rk_steps - 1:
+
             # Adjust time step for output if necessary
             fields_dt = self.FieldsIO.last_output_time + self.FieldsIO.frequency - self.TS.t
             stats_dt = self.StatsIO.last_output_time + self.StatsIO.frequency - self.TS.t
@@ -208,15 +209,13 @@ class Simulation3d:
             restart_dt = self.Restart.last_restart_time + self.Restart.frequency - self.TS.t
             vis_dt = self.VO.last_vis_time + self.VO.frequency - self.TS.t
 
-
             dts = np.array([fields_dt, stats_dt, condstats_dt, restart_dt, vis_dt,
                             self.TS.dt, self.TS.dt_max, self.VO.frequency, self.Restart.frequency,
                             self.StatsIO.frequency, self.CondStatsIO.frequency, self.FieldsIO.frequency])
 
-
-
             self.TS.dt = np.amin(dts[dts > 0.0])
-            # If time to ouptut fields do output
+
+            # If time to output do output
             if self.FieldsIO.last_output_time + self.FieldsIO.frequency == self.TS.t:
                 self.Pa.root_print('Doing 3D FieldIO')
                 self.Th.update(self.Gr, self.Ref, self.PV, self.DV)
@@ -224,9 +223,8 @@ class Simulation3d:
                 self.FieldsIO.update(self.Gr, self.PV, self.DV, self.TS, self.Pa)
                 self.FieldsIO.dump_prognostic_variables(self.Gr, self.PV)
                 self.FieldsIO.dump_diagnostic_variables(self.Gr, self.DV, self.Pa)
-                self.Pa.root_print('Finished Doing 3D FieldIO')
+                self.Pa.root_print('Finished doing 3D FieldIO')
 
-            # If time to ouput stats do output
             if self.StatsIO.last_output_time + self.StatsIO.frequency == self.TS.t:
                 self.Pa.root_print('Doing StatsIO')
                 self.StatsIO.last_output_time = self.TS.t
@@ -254,14 +252,13 @@ class Simulation3d:
                 self.Pa.root_print('Finished Doing StatsIO')
 
 
-            # If time to ouput stats do output
             if self.CondStatsIO.last_output_time + self.CondStatsIO.frequency == self.TS.t:
                 self.Pa.root_print('Doing CondStatsIO')
                 self.CondStatsIO.last_output_time = self.TS.t
                 self.CondStatsIO.write_condstat_time(self.TS.t, self.Pa)
 
                 self.CondStats.stats_io(self.Gr, self.Ref, self.PV, self.DV, self.CondStatsIO, self.Pa)
-                self.Pa.root_print('Finished Doing CondStatsIO')
+                self.Pa.root_print('Finished doing CondStatsIO')
 
 
             if self.VO.last_vis_time + self.VO.frequency == self.TS.t:
@@ -288,15 +285,21 @@ class Simulation3d:
         return
 
     def force_io(self):
-        # output stats here
 
-        self.Pa.root_print('Doing 3D FieldIO')
+        # Adjust initial time step for output if necessary
+        dts = np.array([self.TS.dt, self.TS.dt_max, self.VO.frequency, self.Restart.frequency,
+                        self.StatsIO.frequency, self.CondStatsIO.frequency, self.FieldsIO.frequency])
+        self.TS.dt = np.amin(dts[dts > 0.0])
+        
+        # Output
+        self.Pa.root_print('Doing initial 3D FieldIO')
         self.Th.update(self.Gr, self.Ref, self.PV, self.DV)
         self.FieldsIO.update(self.Gr, self.PV, self.DV, self.TS, self.Pa)
         self.FieldsIO.dump_prognostic_variables(self.Gr, self.PV)
         self.FieldsIO.dump_diagnostic_variables(self.Gr, self.DV, self.Pa)
-        self.Pa.root_print('Finished Doing 3D FieldIO')
+        self.Pa.root_print('Finished doing initial 3D FieldIO')
 
+        self.Pa.root_print('Doing (Cond)StatsIO')
         self.StatsIO.open_files(self.Pa)
         self.StatsIO.write_simulation_time(self.TS.t, self.Pa)
         self.PV.stats_io(self.Gr, self.Ref, self.StatsIO, self.Pa)
@@ -319,6 +322,8 @@ class Simulation3d:
         self.Budg.stats_io(self.Sur, self.StatsIO, self.Pa)
         self.Aux.stats_io(self.Gr, self.Ref, self.PV, self.DV, self.MA, self.MD, self.StatsIO, self.Pa)
         self.StatsIO.close_files(self.Pa)
+        self.Pa.root_print('Finished doing (Cond)StatsIO')
+
         return
 
     def postprocess(self):        
