@@ -16,6 +16,7 @@ import cython
 cimport numpy as np
 import numpy as np
 from libc.math cimport sqrt
+cimport mpi4py.libmpi as mpi
 include "parameters.pxi"
 
 # SR/INLINE {
@@ -61,6 +62,8 @@ class AuxiliaryStatistics:
             self.AuxStatsClasses.append(FluxStatistics(Gr,PV, DV, NS, Pa))
         if 'PBLheight' in auxiliary_statistics:
             self.AuxStatsClasses.append(PBLheightStatistics(Gr, NS, Pa))
+        if 'TurbMeas' in auxiliary_statistics:
+            self.AuxStatsClasses.append(TurbMeasStatistics(Gr, NS, Pa, namelist['stats_io']['meas_locs']))
         return
 
 
@@ -955,5 +958,130 @@ class PBLheightStatistics: ### structure from SmokeStats
         blh = Pa.HorizontalMeanSurface(Gr, &blh_field[0]) # XXX why [0] ? 
 
         NS.write_ts('boundary_layer_height', blh, Pa) # ts = time series: append one value
+
+        return
+
+class TurbMeasStatistics:
+    def __init__(self,Grid.Grid Gr, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa, list meas_locs):
+
+        meas_locs = [np.array(loc) for loc in meas_locs]
+        self.n_meas_locs = len(meas_locs)
+
+        # convert the locations [m] to the indices of the closest grid point
+        self.meas_loc_idcs = [self.get_closest_grid_point(Gr, loc)[0] for loc in meas_locs] # overall index (int)
+        self.meas_loc_idcs_dims = [self.get_closest_grid_point(Gr, loc)[1:] for loc in meas_locs] # indices in each dim (tuple of int)
+
+        # know which rank the point is saved on
+        cdef:
+            int rank = 0
+            int ierr = 0
+            int [3] idcs
+
+        self.ranks = np.zeros(self.n_meas_locs, dtype=np.int, order='c')
+        for i in range(self.n_meas_locs):
+            idcs = self.meas_loc_idcs_dims[i] # int[3]
+            ierr =  mpi.MPI_Cart_rank(Pa.cart_comm_world, idcs, &rank)
+            self.ranks[i] = rank
+
+        # fixed measured variables
+        self.turb_variables = ['u','v','w','theta']
+        units = ['m/s','m/s','m/s','K']
+        
+        # prepare the output time series
+        for i,loc in enumerate(meas_locs):
+            for j,var in enumerate(self.turb_variables):
+                NS.add_ts(
+                    'turb_meas_'+var+'_loc'+str(i),
+                    Gr, Pa,
+                    units=units[j], nice_name=f'{var} at measurement location {i}, (x,y,z)={loc}', desc=f'time series'
+                )
+        return
+
+    def get_closest_grid_point(self, Grid.Grid Gr, double [:] loc):
+        """
+        find closest grid cell in each dimension
+        nlg is the number of local points per worker
+        including 2*Gr.dims.gw ghost cells
+        x_half also includes the ghost cells
+        """
+        cdef:
+            Py_ssize_t istride = Gr.dims.nlg[1] * Gr.dims.nlg[2]
+            Py_ssize_t jstride = Gr.dims.nlg[2]
+
+            double x_dist =  1_000_000_000
+            double y_dist =  1_000_000_000
+            double z_dist =  1_000_000_000
+
+            double x_dist_
+            double y_dist_
+            double z_dist_
+
+            int idx_i 
+            int idx_j 
+            int idx_k 
+
+            int idx
+
+        for i in xrange(Gr.dims.nlg[0]):
+            x_dist_ = np.abs(Gr.x_half[i] - loc[0])
+            if x_dist_ < x_dist:
+                x_dist = x_dist_
+                idx_i = i
+
+        for j in xrange(Gr.dims.nlg[1]):
+            y_dist_ = np.abs(Gr.y_half[j] - loc[1])
+            if y_dist_ < y_dist:
+                y_dist = y_dist_
+                idx_j = j
+        
+        for k in xrange(Gr.dims.nlg[2]):
+            z_dist_ = np.abs(Gr.z_half[k] - loc[2])
+            if z_dist_ < z_dist:
+                z_dist = z_dist_
+                idx_k = k
+
+        # construct index for 1d array
+        idx = idx_i*istride + idx_j*jstride + idx_k
+        
+        print('Taking scalar time series measurements at location',loc)
+        print('corresponding to grid point with ghost cells (i,j,k)=',idx_i,idx_j,idx_k,' with total index',idx)
+        print('at location',Gr.x_half[idx_i],Gr.y_half[idx_j],Gr.z_half[idx_k],' with location error',x_dist,y_dist,z_dist)        
+
+        return idx, idx_i, idx_j, idx_k
+
+    def stats_io(self, Grid.Grid Gr, ReferenceState.ReferenceState RS, PrognosticVariables.PrognosticVariables PV,
+                 DiagnosticVariables.DiagnosticVariables DV,
+                 MomentumAdvection.MomentumAdvection MA, MomentumDiffusion.MomentumDiffusion MD, NetCDFIO_Stats NS,
+                 ParallelMPI.ParallelMPI Pa):
+
+        cdef:
+            Py_ssize_t u_shift = PV.get_varshift(Gr, 'u')
+            Py_ssize_t v_shift = PV.get_varshift(Gr, 'v')
+            Py_ssize_t w_shift = PV.get_varshift(Gr, 'w')
+            Py_ssize_t th_shift = DV.get_varshift(Gr, 'theta')
+
+            double [:] u_meas = np.zeros(self.n_meas_locs, dtype=np.double, order='c')
+            double [:] v_meas = np.zeros(self.n_meas_locs, dtype=np.double, order='c')
+            double [:] w_meas = np.zeros(self.n_meas_locs, dtype=np.double, order='c')
+            double [:] theta_meas = np.zeros(self.n_meas_locs, dtype=np.double, order='c')
+
+            int loc_idx
+            int i = 0
+
+        # get the values at the measurement location from the rank they are stored on
+        for i in xrange(self.n_meas_locs):
+            if Pa.rank == self.ranks[i]:
+                loc_idx = int(self.meas_loc_idcs[i])
+                u_meas[i] = PV.values[u_shift + loc_idx]
+                v_meas[i] = PV.values[v_shift + loc_idx]
+                w_meas[i] = PV.values[w_shift + loc_idx]
+                theta_meas[i] = DV.values[th_shift + loc_idx]
+           
+        # append one value to the time series
+        for i in range(self.n_meas_locs):
+            NS.write_ts('turb_meas_u_loc'+str(i), u_meas[i], Pa)
+            NS.write_ts('turb_meas_v_loc'+str(i), v_meas[i], Pa)
+            NS.write_ts('turb_meas_w_loc'+str(i), w_meas[i], Pa)
+            NS.write_ts('turb_meas_theta_loc'+str(i), theta_meas[i], Pa)
 
         return
