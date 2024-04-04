@@ -28,22 +28,31 @@ cdef class PostProcessing:
         self.stats_file = os.path.join(stats_dir,'Stats.'+namelist['meta']['simname']+'.nc')
         self.gridsize = [namelist["grid"]["nx"], namelist["grid"]["ny"], namelist["grid"]["nz"]]
         self.gridspacing = [namelist["grid"]["dx"], namelist["grid"]["dy"], namelist["grid"]["dz"]]
-        if namelist['postprocessing']['collapse_y']:
-            self.collapse_y = True
-        else:
-            self.collapse_y = False
-        if namelist['postprocessing']['half_x']:
-            self.half_x = True
-        else:
-            self.half_x = False
-        if namelist['postprocessing']['only_T_anomaly']:
-            self.only_T_anomaly = True
-        else:
-            self.only_T_anomaly = False
-        if namelist['postprocessing']['skip_vels']:
-            self.skip_vels = True
-        else:
-            self.skip_vels = False
+        
+        if 'postprocessing' in namelist.keys():
+            
+            # To Do (Dana, 13.03.24): Change this parts to flags
+            # namelist['postprocessing']['additional'] = [collapse_y, ...]
+            if 'collapse_y' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['collapse_y']:
+                    self.collapse_y = True
+                else:
+                    self.collapse_y = False
+            if 'half_x' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['half_x']:
+                    self.half_x = True
+                else:
+                    self.half_x = False
+            if 'only_T_anomaly' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['only_T_anomaly']:
+                    self.only_T_anomaly = True
+                else:
+                    self.only_T_anomaly = False
+            if 'skip_vels' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['skip_vels']:
+                    self.skip_vels = True
+                else:
+                    self.skip_vels = False
         return
 
     
