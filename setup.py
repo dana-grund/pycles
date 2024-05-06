@@ -26,7 +26,7 @@ def get_netcdf_prefix():
 
 conda_root = os.environ.get('CONDA_DEFAULT_ENV')
 print(f'[setup.py] {conda_root=}')
-if conda_root:
+if conda_root and not  'eu' in platform.node():
     # Compile flags for conda env (implemented on nitrogen at IAC-ETHZ)
     assert conda_root, "no active conda env"  # SR/TMP
     conda_lib = conda_root + '/lib'

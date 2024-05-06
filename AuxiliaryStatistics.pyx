@@ -16,6 +16,7 @@ import cython
 cimport numpy as np
 import numpy as np
 from libc.math cimport sqrt
+cimport mpi4py.libmpi as mpi
 include "parameters.pxi"
 
 # SR/INLINE {
@@ -61,6 +62,8 @@ class AuxiliaryStatistics:
             self.AuxStatsClasses.append(FluxStatistics(Gr,PV, DV, NS, Pa))
         if 'PBLheight' in auxiliary_statistics:
             self.AuxStatsClasses.append(PBLheightStatistics(Gr, NS, Pa))
+        if 'TurbMeas' in auxiliary_statistics:
+            self.AuxStatsClasses.append(TurbMeasStatistics(Gr, NS, Pa, namelist['stats_io']['meas_locs']))
         return
 
 
@@ -955,5 +958,197 @@ class PBLheightStatistics: ### structure from SmokeStats
         blh = Pa.HorizontalMeanSurface(Gr, &blh_field[0]) # XXX why [0] ? 
 
         NS.write_ts('boundary_layer_height', blh, Pa) # ts = time series: append one value
+
+        return
+
+class TurbMeasStatistics:
+    def __init__(self,Grid.Grid Gr, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa, list meas_locs):
+        """
+        Assuming all meas_locs are part of the grid (truncating coordinates to grid in each dimension).
+        Currently only supports nprox>=1, nprocy=1, nprocz=1.
+        """
+
+        meas_locs = [np.array(loc) for loc in meas_locs]
+        self.n_meas_locs = len(meas_locs)
+
+        # get overall indices of the points 
+        # assuming all measurement locations are part of the grid!
+        for i in range(self.n_meas_locs):
+            print('Taking scalar measurements at location',i,'with coordinates',np.array(meas_locs[i]))
+        meas_loc_idcs_dims = [
+            tuple(
+                loc[d]//Gr.dims.dx[d] for d in range(3)
+            ) for loc in meas_locs
+        ]
+
+        # know how many workers participate
+        cdef:
+            int ierr = 0
+            int maxdims = 3
+            int [3] mpi_dims
+            int [3] mpi_periods
+            int [3] mpi_coords
+        ierr = mpi.MPI_Cart_get(Pa.cart_comm_world,maxdims,mpi_dims,mpi_periods,mpi_coords)
+        n_workers = mpi_dims[0]
+
+        # reconstruct nl on all workers
+        # Gr.dims.nl = number of local points on this worker without ghost cells
+        n = Gr.dims.n[0]
+        nl = [n // n_workers for _ in range(n_workers)] # XXX x only
+        for i in range(n%n_workers):
+            nl[i] += 1
+        
+        # get starting index of each rank
+        starting_index = [0]
+        for i in range(1,n_workers):
+            starting_index.append(starting_index[i-1]+nl[i-1])
+
+        # for each location, find the rank it is on based on the new nl
+        meas_loc_cart = []
+        for loc in meas_loc_idcs_dims:
+            l_total = 0
+            for n_worker, l_worker in enumerate(nl):
+                l_total += l_worker
+                if loc[0] - l_total < 0:
+                    meas_loc_cart.append((n_worker,0,0))
+                    break
+
+        # get scalar rank number
+        cdef:
+            int rank = 0
+            int [3] coords
+
+        self.ranks = np.zeros(self.n_meas_locs, dtype=np.int, order='c')
+        for i in range(self.n_meas_locs):
+            coords = meas_loc_cart[i] # int[3]
+            ierr =  mpi.MPI_Cart_rank(Pa.cart_comm_world, coords, &rank)
+            self.ranks[i] = rank
+            # print('Measurement location ',i,' is on rank ',rank)
+
+        # get local index of the location in case we are on its rank, else none
+        self.meas_loc_idcs = [0 for _ in range(self.n_meas_locs)]
+        for l in range(self.n_meas_locs):
+            if Pa.rank == self.ranks[l]:
+                istride = Gr.dims.nlg[1] * Gr.dims.nlg[2]
+                jstride = Gr.dims.nlg[2]
+                idx_x_l = meas_loc_idcs_dims[l][0] - starting_index[Pa.rank] + Gr.dims.gw
+                idx_y_l = meas_loc_idcs_dims[l][1] + Gr.dims.gw
+                idx_z_l = meas_loc_idcs_dims[l][2] + Gr.dims.gw
+                self.meas_loc_idcs[l] = idx_x_l*istride + idx_y_l*jstride + idx_z_l
+            else:
+                self.meas_loc_idcs[l] = -1 # None
+
+        # fixed measured variables
+        self.turb_variables = ['u','v','w','theta']
+        units = ['m/s','m/s','m/s','K']
+        
+        # prepare the output time series
+        for i,loc in enumerate(meas_locs):
+            for j,var in enumerate(self.turb_variables):
+                NS.add_ts(
+                    'turb_meas_'+var+'_loc'+str(i),
+                    Gr, Pa,
+                    units=units[j], nice_name=f'{var} at measurement location {i}, (x,y,z)={loc}', desc=f'time series'
+                )
+        return
+
+    def get_closest_grid_point(self, Grid.Grid Gr, double [:] loc):
+        """
+        find closest grid cell in each dimension
+        nlg is the number of local points per worker
+        including 2*Gr.dims.gw ghost cells
+        x_half also includes the ghost cells
+        """
+        cdef:
+            Py_ssize_t istride = Gr.dims.nlg[1] * Gr.dims.nlg[2]
+            Py_ssize_t jstride = Gr.dims.nlg[2]
+
+            double x_dist =  -1
+            double y_dist =  -1
+            double z_dist =  -1
+
+            double x_dist_
+            double y_dist_
+            double z_dist_
+
+            int idx_i 
+            int idx_j 
+            int idx_k 
+
+            int idx
+
+        for i in xrange(Gr.dims.nlg[0]):
+            x_dist_ = np.abs(Gr.x_half[i] - loc[0])
+            if x_dist_ < x_dist or x_dist < 0:
+                x_dist = x_dist_
+                idx_i = i
+
+        for j in xrange(Gr.dims.nlg[1]):
+            y_dist_ = np.abs(Gr.y_half[j] - loc[1])
+            if y_dist_ < y_dist or y_dist < 0:
+                y_dist = y_dist_
+                idx_j = j
+        
+        for k in xrange(Gr.dims.nlg[2]):
+            z_dist_ = np.abs(Gr.z_half[k] - loc[2])
+            if z_dist_ < z_dist or z_dist < 0:
+                z_dist = z_dist_
+                idx_k = k
+
+        # construct index for 1d array
+        idx = idx_i*istride + idx_j*jstride + idx_k
+        
+        print('Taking scalar time series measurements')
+        print('at location',Gr.x_half[idx_i],Gr.y_half[idx_j],Gr.z_half[idx_k],' with location error',x_dist,y_dist,z_dist)        
+        print('corresponding to grid point with ghost cells (i,j,k)=',idx_i,idx_j,idx_k,' with total index',idx)
+
+        return idx, idx_i, idx_j, idx_k
+
+    def stats_io(self, Grid.Grid Gr, ReferenceState.ReferenceState RS, PrognosticVariables.PrognosticVariables PV,
+                 DiagnosticVariables.DiagnosticVariables DV,
+                 MomentumAdvection.MomentumAdvection MA, MomentumDiffusion.MomentumDiffusion MD, NetCDFIO_Stats NS,
+                 ParallelMPI.ParallelMPI Pa):
+
+        cdef:
+            Py_ssize_t u_shift = PV.get_varshift(Gr, 'u')
+            Py_ssize_t v_shift = PV.get_varshift(Gr, 'v')
+            Py_ssize_t w_shift = PV.get_varshift(Gr, 'w')
+            Py_ssize_t th_shift = DV.get_varshift(Gr, 'theta')
+
+            double u_meas = 0
+            double v_meas = 0
+            double w_meas = 0
+            double theta_meas = 0
+
+            int loc_idx
+            int i = 0
+
+        # get the values at the measurement location from the rank they are stored on
+        for i in xrange(self.n_meas_locs):
+            u_meas = 0
+            v_meas = 0
+            w_meas = 0
+            theta_meas = 0
+            
+            if Pa.rank == self.ranks[i]:
+                loc_idx = int(self.meas_loc_idcs[i])
+
+                u_meas = PV.values[u_shift + loc_idx]
+                v_meas = PV.values[v_shift + loc_idx]
+                w_meas = PV.values[w_shift + loc_idx]
+                theta_meas = DV.values[th_shift + loc_idx]
+            
+            # communicate the local values to rank 0 who writes
+            # should be non-zero on exactly one rank
+            u_meas = Pa.domain_scalar_sum(u_meas)
+            v_meas = Pa.domain_scalar_sum(v_meas)
+            w_meas = Pa.domain_scalar_sum(w_meas)
+            theta_meas = Pa.domain_scalar_sum(theta_meas)
+
+            # append one value to the time series on the respective rank
+            NS.write_ts('turb_meas_u_loc'+str(i), u_meas, Pa)
+            NS.write_ts('turb_meas_v_loc'+str(i), v_meas, Pa)
+            NS.write_ts('turb_meas_w_loc'+str(i), w_meas, Pa)
+            NS.write_ts('turb_meas_theta_loc'+str(i), theta_meas, Pa)
 
         return
