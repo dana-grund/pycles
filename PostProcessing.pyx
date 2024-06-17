@@ -20,14 +20,58 @@ cdef class PostProcessing:
         pass
 
     cpdef initialize(self, namelist):
+
+        # identity
         uuid = str(namelist['meta']['uuid'])
-        out_dir = str(os.path.join(namelist['output']['output_root'] + 'Output.' + namelist['meta']['simname'] + '.' + uuid[-5:])) 
-        self.out_dir = out_dir
-        self.fields_dir = str(os.path.join(out_dir, namelist['fields_io']['fields_dir']))
-        stats_dir = str(os.path.join(out_dir, namelist['stats_io']['stats_dir']))
-        self.stats_file = os.path.join(stats_dir,'Stats.'+namelist['meta']['simname']+'.nc')
-        self.gridsize = [namelist["grid"]["nx"], namelist["grid"]["ny"], namelist["grid"]["nz"]]
-        self.gridspacing = [namelist["grid"]["dx"], namelist["grid"]["dy"], namelist["grid"]["dz"]]
+        self.simname = namelist['meta']['simname']
+
+        # directories
+        self.out_dir = str(os.path.join(
+            namelist['output']['output_root'],
+            'Output.' + self.simname + '.' + uuid[-5:]
+        ))
+        self.stats_dir = str(os.path.join(
+            self.out_dir, 
+            namelist['stats_io']['stats_dir']
+        ))
+        self.cond_stats_dir = str(os.path.join(
+            self.out_dir, 
+            namelist['conditional_stats']['stats_dir']
+        ))
+        self.fields_dir = str(os.path.join(
+            self.out_dir, 
+            namelist['fields_io']['fields_dir']
+        ))
+        self.restart_dir = str(os.path.join(
+            self.out_dir, 
+            "Restart"
+        ))
+        self.vis_dir = str(os.path.join(
+            self.out_dir, 
+            "Visualization"
+        ))
+
+        # files
+        self.stats_file = os.path.join(
+            self.stats_dir,
+            'Stats.'+self.simname+'.nc'
+        )
+        self.cond_stats_file = os.path.join(
+            self.cond_stats_dir,
+            'CondStats.'+self.simname+'.nc'
+        )
+
+        # grid
+        self.gridsize = [
+            namelist["grid"]["nx"], 
+            namelist["grid"]["ny"], 
+            namelist["grid"]["nz"]
+        ]
+        self.gridspacing = [
+            namelist["grid"]["dx"], 
+            namelist["grid"]["dy"], 
+            namelist["grid"]["dz"]
+        ]
         
         if 'postprocessing' in namelist.keys():
             
@@ -58,6 +102,11 @@ cdef class PostProcessing:
                     self.merge_timesteps = True
                 else:
                     self.merge_timesteps = False
+            if 'collapse_folders' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['collapse_folders']:
+                    self.collapse_folders = True
+                else:
+                    self.collapse_folders = False
         return
 
     
@@ -70,16 +119,14 @@ cdef class PostProcessing:
             every time step is one .nc file
             and data is stored as 3D arrays
         After if self.merge_timesteps:
-            all time steps are merged into one file called fields/fields.nc
+            all time steps are merged into one file called fields/Fields.nc
         '''
         
         Pa.barrier()
         if Pa.rank == 0:
         
             nx, ny, nz = self.gridsize
-
             fields_dir = self.fields_dir
-            out_dir = self.out_dir
 
             # one directory per time step: 0/, 300/, ...
             time_steps = os.listdir(fields_dir)
@@ -131,6 +178,8 @@ cdef class PostProcessing:
             if self.merge_timesteps:
                 self.merge_timesteps_to_one_file(time_steps)
 
+            if self.collapse_folders:
+                self.collapse_folders_to_files(time_steps)
                 
             print('Finished combining ranks per time step.\n')
         return
@@ -200,8 +249,46 @@ cdef class PostProcessing:
 
         # save as one file
         ds = xr.open_mfdataset(single_files)
-        ds.to_netcdf(os.path.join(self.fields_dir, 'fields.nc'))
+        ds.to_netcdf(os.path.join(self.fields_dir, 'Fields.nc'))
 
         # remove single time step files
         for f in single_files:
             os.remove(f)
+
+    cpdef collapse_folders_to_files(self, time_steps):
+
+        # move and rename fields
+        if self.merge_timesteps:
+            fields_file = os.path.join(self.fields_dir, 'Fields.nc')
+            shutil.move(fields_file, self.out_dir)
+        else:
+            for t in time_steps:
+                single_file = os.path.join(
+                    self.fields_dir, 
+                    f'{t}.nc'
+                )
+                new_file = os.path.join(
+                    self.out_dir,
+                    f'Fields_{t}.nc'
+                )
+                shutil.move(
+                    single_file, 
+                    new_file
+                )
+
+        # move and rename stats
+        shutil.move(
+            self.stats_file, 
+            os.path.join(self.out_dir, 'Stats.nc')
+        )
+        shutil.move(
+            self.cond_stats_file, 
+            os.path.join(self.out_dir, 'CondStats.nc')
+        )
+
+        # delete folders
+        shutil.rmtree(self.fields_dir)
+        shutil.rmtree(self.stats_dir)
+        shutil.rmtree(self.cond_stats_dir)
+        shutil.rmtree(self.vis_dir)
+        shutil.rmtree(self.restart_dir)

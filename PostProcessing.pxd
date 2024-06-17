@@ -9,16 +9,27 @@ cimport ReferenceState
 
 cdef class PostProcessing:
     cdef:
+        str simname
+
         str out_dir
         str fields_dir
+        str stats_dir
+        str cond_stats_dir
+        str restart_dir
+        str vis_dir
+
         str stats_file
+        str cond_stats_file
+
         list gridsize
         list gridspacing
+
         bint collapse_y
         bint half_x
         bint only_T_anomaly
         bint skip_vels
         bint merge_timesteps
+        bint collapse_folders
 
     cpdef initialize(self, namelist)
     cpdef combine3d(self, ParallelMPI.ParallelMPI Pa, ReferenceState.ReferenceState Ref)
@@ -26,3 +37,4 @@ cdef class PostProcessing:
                 int indx_lo_1, int indx_lo_2, double[:, :, :] f_data_3d)
     cpdef save_timestep(self, fname, variables, time, ReferenceState.ReferenceState Ref)
     cpdef merge_timesteps_to_one_file(self, time_steps)
+    cpdef collapse_folders_to_files(self, time_steps)
