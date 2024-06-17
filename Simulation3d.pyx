@@ -67,9 +67,7 @@ class Simulation3d:
         self.Damping = Damping.Damping(namelist, self.Pa)
         self.TS = TimeStepping.TimeStepping()
         self.Tr = TracersFactory(namelist)
-
         self.PP = PostProcessing(namelist)
-        self.PP.initialize(namelist)
 
         # Add new prognostic variables
         self.PV.add_variable('u', 'm/s', 'u', 'u velocity component',"sym", "velocity", self.Pa)
@@ -138,6 +136,7 @@ class Simulation3d:
         self.Damping.initialize(self.Gr, self.Ref)
         self.Aux.initialize(namelist, self.Gr, self.PV, self.DV, self.StatsIO, self.Pa)
         self.CondStats.initialize(namelist, self.Gr, self.PV, self.DV, self.CondStatsIO, self.Pa)
+        self.PP.initialize(namelist)
 
         return
 
@@ -327,4 +326,4 @@ class Simulation3d:
         return
 
     def postprocess(self):        
-        self.PP.combine3d(self.Pa, self.Ref)
+        self.PP.postprocess(self.Pa, self.Ref)

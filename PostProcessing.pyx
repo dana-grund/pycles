@@ -72,7 +72,7 @@ cdef class PostProcessing:
             namelist["grid"]["dy"], 
             namelist["grid"]["dz"]
         ]
-        
+
         if 'postprocessing' in namelist.keys():
             
             # To Do (Dana, 13.03.24): Change this parts to flags
@@ -109,8 +109,11 @@ cdef class PostProcessing:
                     self.collapse_folders = False
         return
 
-    
-    cpdef combine3d(self, ParallelMPI.ParallelMPI Pa, ReferenceState.ReferenceState Ref):
+    cpdef postprocess(
+        self, 
+        ParallelMPI.ParallelMPI Pa, 
+        ReferenceState.ReferenceState Ref
+        ):
         '''
         Before: 
             every time step is a directory with .nc files for each rank (i.e. processor)
@@ -118,70 +121,86 @@ cdef class PostProcessing:
         After: 
             every time step is one .nc file
             and data is stored as 3D arrays
-        After if self.merge_timesteps:
+        If self.merge_timesteps:
             all time steps are merged into one file called fields/Fields.nc
+        If self.collapse_folders:
+            all fields and stats files are moved to the output directory
         '''
-        
+    
+        # time steps
+        self.time_steps = os.listdir(self.fields_dir)
+
+        # postprocessing
         Pa.barrier()
         if Pa.rank == 0:
+            self.combine3d(Ref)
         
-            nx, ny, nz = self.gridsize
-            fields_dir = self.fields_dir
-
-            # one directory per time step: 0/, 300/, ...
-            time_steps = os.listdir(fields_dir)
-            print('\nBeginning combination of ranks in time step directories', time_steps)
-
-            for d in time_steps:
-                d_path = os.path.join(fields_dir, d)
-                ranks = os.listdir(d_path)
-
-                print(f'\tCombining ranks {ranks} of time step (dir) {d}')
-
-                file_path = os.path.join(fields_dir, d, ranks[0])
-                save_path = os.path.join(fields_dir, str(d) + '.nc')
-                with xr.open_dataset(file_path, group='fields') as ds:
-                    field_keys = ds.variables
-
-                variables_to_save = {}
-                for f in field_keys:
-                    f_data_3d = np.empty((nx, ny, nz), dtype=np.double, order='c')
-
-                    for r in ranks:
-                        if r[-3:] == '.nc':
-                            file_path = os.path.join(fields_dir, d, r)
-
-                            with xr.open_dataset(file_path, group='fields') as ds:
-                                f_data = ds[f].values # to_numpy()
-                            with xr.open_dataset(file_path, group='dims') as ds:
-                                dims = ds.variables
-
-                            nl_0 = dims['nl_0'][0] # grid size per processor
-                            nl_1 = dims['nl_1'][0]
-                            nl_2 = dims['nl_2'][0]
-
-                            indx_lo_0 = dims['indx_lo_0'][0]
-                            indx_lo_1 = dims['indx_lo_1'][0]
-                            indx_lo_2 = dims['indx_lo_2'][:]
-
-                            self.to_3d(
-                                f_data, nl_0, nl_1, nl_2, indx_lo_0, indx_lo_1, indx_lo_2, f_data_3d
-                            )
-
-                            variables_to_save[f] = (('x','y','z','t'), np.expand_dims(f_data_3d, axis=3))
-                
-                # save the new file 0.nc instead of the old directory 0/
-                self.save_timestep(save_path, variables_to_save, d, Ref)
-                shutil.rmtree(d_path)
-            
-            # combine all time steps into one file
             if self.merge_timesteps:
-                self.merge_timesteps_to_one_file(time_steps)
+                self.merge_timesteps_to_one_file()
 
             if self.collapse_folders:
-                self.collapse_folders_to_files(time_steps)
-                
-            print('Finished combining ranks per time step.\n')
+                self.collapse_folders_to_files()
+        
+        return
+    
+    cpdef combine3d(self, ReferenceState.ReferenceState Ref):
+        '''
+        Before: 
+            every time step is a directory with .nc files for each rank (i.e. processor)
+            and data is stored as 1D arrays
+        After: 
+            every time step is one .nc file
+            and data is stored as 3D arrays
+        '''
+        nx, ny, nz = self.gridsize
+        fields_dir = self.fields_dir
+
+        # one directory per time step: 0/, 300/, ...
+        print('\nBeginning combination of ranks in time step directories', self.time_steps)
+
+        for d in self.time_steps:
+            d_path = os.path.join(fields_dir, d)
+            ranks = os.listdir(d_path)
+
+            print(f'\tCombining ranks {ranks} of time step (dir) {d}')
+
+            file_path = os.path.join(fields_dir, d, ranks[0])
+            save_path = os.path.join(fields_dir, str(d) + '.nc')
+            with xr.open_dataset(file_path, group='fields') as ds:
+                field_keys = ds.variables
+
+            variables_to_save = {}
+            for f in field_keys:
+                f_data_3d = np.empty((nx, ny, nz), dtype=np.double, order='c')
+
+                for r in ranks:
+                    if r[-3:] == '.nc':
+                        file_path = os.path.join(fields_dir, d, r)
+
+                        with xr.open_dataset(file_path, group='fields') as ds:
+                            f_data = ds[f].values # to_numpy()
+                        with xr.open_dataset(file_path, group='dims') as ds:
+                            dims = ds.variables
+
+                        nl_0 = dims['nl_0'][0] # grid size per processor
+                        nl_1 = dims['nl_1'][0]
+                        nl_2 = dims['nl_2'][0]
+
+                        indx_lo_0 = dims['indx_lo_0'][0]
+                        indx_lo_1 = dims['indx_lo_1'][0]
+                        indx_lo_2 = dims['indx_lo_2'][:]
+
+                        self.to_3d(
+                            f_data, nl_0, nl_1, nl_2, indx_lo_0, indx_lo_1, indx_lo_2, f_data_3d
+                        )
+
+                        variables_to_save[f] = (('x','y','z','t'), np.expand_dims(f_data_3d, axis=3))
+            
+            # save the new file 0.nc instead of the old directory 0/
+            self.save_timestep(save_path, variables_to_save, d, Ref)
+            shutil.rmtree(d_path)
+            
+        print('Finished combining ranks per time step.\n')
         return
 
     cpdef to_3d(self, double[:] f_data, int nl_0, int nl_1, int nl_2, int indx_lo_0,
@@ -204,9 +223,12 @@ cdef class PostProcessing:
                         ijk = ishift + jshift + k
                         f_data_3d[
                             indx_lo_0 + i, indx_lo_1 + j, indx_lo_2 + k] = f_data[ijk]
+        return
                             
     cpdef save_timestep(self, fname, variables, time, ReferenceState.ReferenceState Ref):
-
+        '''
+        Add some good practice netcdf formatting
+        '''
         nx, ny, nz = self.gridsize
         dx, dy, dz = self.gridspacing
         
@@ -240,11 +262,13 @@ cdef class PostProcessing:
             ds = ds.isel(x=slice(0,half_x))
 
         ds.to_netcdf(fname)
+        
+        return
 
-    cpdef merge_timesteps_to_one_file(self, time_steps):
+    cpdef merge_timesteps_to_one_file(self):
 
         single_files = [
-            os.path.join(self.fields_dir, f'{t}.nc') for t in time_steps
+            os.path.join(self.fields_dir, f'{t}.nc') for t in self.time_steps
         ]
 
         # save as one file
@@ -254,15 +278,17 @@ cdef class PostProcessing:
         # remove single time step files
         for f in single_files:
             os.remove(f)
+        
+        return
 
-    cpdef collapse_folders_to_files(self, time_steps):
+    cpdef collapse_folders_to_files(self):
 
         # move and rename fields
         if self.merge_timesteps:
             fields_file = os.path.join(self.fields_dir, 'Fields.nc')
             shutil.move(fields_file, self.out_dir)
         else:
-            for t in time_steps:
+            for t in self.time_steps:
                 single_file = os.path.join(
                     self.fields_dir, 
                     f'{t}.nc'
@@ -292,3 +318,5 @@ cdef class PostProcessing:
         shutil.rmtree(self.cond_stats_dir)
         shutil.rmtree(self.vis_dir)
         shutil.rmtree(self.restart_dir)
+
+        return
