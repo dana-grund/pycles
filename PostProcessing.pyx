@@ -53,6 +53,11 @@ cdef class PostProcessing:
                     self.skip_vels = True
                 else:
                     self.skip_vels = False
+            if 'merge_timesteps' in namelist['postprocessing'].keys():
+                if namelist['postprocessing']['merge_timesteps']:
+                    self.merge_timesteps = True
+                else:
+                    self.merge_timesteps = False
         return
 
     
@@ -64,6 +69,8 @@ cdef class PostProcessing:
         After: 
             every time step is one .nc file
             and data is stored as 3D arrays
+        After if self.merge_timesteps:
+            all time steps are merged into one file called fields/fields.nc
         '''
         
         Pa.barrier()
@@ -74,25 +81,24 @@ cdef class PostProcessing:
             fields_dir = self.fields_dir
             out_dir = self.out_dir
 
-            directories = os.listdir(fields_dir)
-            print('\nBeginning combination of ranks in time step directories', directories)
+            # one directory per time step: 0/, 300/, ...
+            time_steps = os.listdir(fields_dir)
+            print('\nBeginning combination of ranks in time step directories', time_steps)
 
-            for d in directories:
+            for d in time_steps:
                 d_path = os.path.join(fields_dir, d)
                 ranks = os.listdir(d_path)
 
-                print(f'\t Combining ranks {ranks} of time step (dir) {d}')
+                print(f'\tCombining ranks {ranks} of time step (dir) {d}')
 
                 file_path = os.path.join(fields_dir, d, ranks[0])
-                save_path = os.path.join(out_dir,'fields/', str(d) + '.nc')
+                save_path = os.path.join(fields_dir, str(d) + '.nc')
                 with xr.open_dataset(file_path, group='fields') as ds:
                     field_keys = ds.variables
-
 
                 variables_to_save = {}
                 for f in field_keys:
                     f_data_3d = np.empty((nx, ny, nz), dtype=np.double, order='c')
-
 
                     for r in ranks:
                         if r[-3:] == '.nc':
@@ -111,17 +117,21 @@ cdef class PostProcessing:
                             indx_lo_1 = dims['indx_lo_1'][0]
                             indx_lo_2 = dims['indx_lo_2'][:]
 
-
                             self.to_3d(
                                 f_data, nl_0, nl_1, nl_2, indx_lo_0, indx_lo_1, indx_lo_2, f_data_3d
                             )
 
                             variables_to_save[f] = (('x','y','z','t'), np.expand_dims(f_data_3d, axis=3))
-
-                # save the new file instead of the old directory
+                
+                # save the new file 0.nc instead of the old directory 0/
                 self.save_timestep(save_path, variables_to_save, d, Ref)
                 shutil.rmtree(d_path)
+            
+            # combine all time steps into one file
+            if self.merge_timesteps:
+                self.merge_timesteps_to_one_file(time_steps)
 
+                
             print('Finished combining ranks per time step.\n')
         return
 
@@ -146,7 +156,6 @@ cdef class PostProcessing:
                         f_data_3d[
                             indx_lo_0 + i, indx_lo_1 + j, indx_lo_2 + k] = f_data[ijk]
                             
-
     cpdef save_timestep(self, fname, variables, time, ReferenceState.ReferenceState Ref):
 
         nx, ny, nz = self.gridsize
@@ -182,3 +191,17 @@ cdef class PostProcessing:
             ds = ds.isel(x=slice(0,half_x))
 
         ds.to_netcdf(fname)
+
+    cpdef merge_timesteps_to_one_file(self, time_steps):
+
+        single_files = [
+            os.path.join(self.fields_dir, f'{t}.nc') for t in time_steps
+        ]
+
+        # save as one file
+        ds = xr.open_mfdataset(single_files)
+        ds.to_netcdf(os.path.join(self.fields_dir, 'fields.nc'))
+
+        # remove single time step files
+        for f in single_files:
+            os.remove(f)

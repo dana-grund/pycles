@@ -18,9 +18,11 @@ cdef class PostProcessing:
         bint half_x
         bint only_T_anomaly
         bint skip_vels
+        bint merge_timesteps
 
     cpdef initialize(self, namelist)
     cpdef combine3d(self, ParallelMPI.ParallelMPI Pa, ReferenceState.ReferenceState Ref)
     cpdef to_3d(self, double[:] f_data, int nl_0, int nl_1, int nl_2, int indx_lo_0,
                 int indx_lo_1, int indx_lo_2, double[:, :, :] f_data_3d)
     cpdef save_timestep(self, fname, variables, time, ReferenceState.ReferenceState Ref)
+    cpdef merge_timesteps_to_one_file(self, time_steps)
