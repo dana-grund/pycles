@@ -286,7 +286,10 @@ cdef class PostProcessing:
         # move and rename fields
         if self.merge_timesteps:
             fields_file = os.path.join(self.fields_dir, 'Fields.nc')
-            shutil.move(fields_file, self.out_dir)
+            shutil.move(
+                fields_file, 
+                os.path.join(self.out_dir, 'Fields.nc')
+            )
         else:
             for t in self.time_steps:
                 single_file = os.path.join(
