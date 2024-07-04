@@ -1018,7 +1018,7 @@ class TurbMeasStatistics:
             int rank = 0
             int [3] coords
 
-        self.ranks = np.zeros(self.n_meas_locs, dtype=np.int, order='c')
+        self.ranks = np.zeros(self.n_meas_locs, dtype=np.int_, order='c')
         for i in range(self.n_meas_locs):
             coords = meas_loc_cart[i] # int[3]
             ierr =  mpi.MPI_Cart_rank(Pa.cart_comm_world, coords, &rank)
