@@ -10,13 +10,18 @@ import os.path
 import string
 import shutil
 
+# Set the compiler
+# CC=mpicc is set by:
+# > CC=mpicc python setup.py …
 if not os.environ.get("CC"):
     os.environ["CC"] = "mpicc"
+print(f"[setup.py] Using the following compiler: {os.environ.get('CC')=}")
 
 # Now get include paths from relevant python modules
 include_path = [mpi4py.get_include()]
 include_path += [np.get_include()]
 include_path += ['./Csrc']
+print("[setup.py] include_path = [mpi4py, np, Csrc] = ", include_path)
 
 def get_netcdf_include():
     return sp.check_output(['nc-config', '--includedir']).strip().decode()
@@ -24,13 +29,19 @@ def get_netcdf_include():
 def get_netcdf_prefix():
     return sp.check_output(['nc-config', '--prefix']).strip().decode()
 
-conda_root = os.environ.get('CONDA_DEFAULT_ENV')
-print(f'[setup.py] {conda_root=}')
-if conda_root and not  'eu' in platform.node():
-    # Compile flags for conda env (implemented on nitrogen at IAC-ETHZ)
+# Even though conda is available, you might not want to use it here
+allow_conda = False 
+conda_prefix = os.environ.get('CONDA_PREFIX')
+print(f'[setup.py] {conda_prefix=}')
+
+if conda_prefix and allow_conda:
+    print('Starting compilation with conda.')
+    conda_root = os.path.dirname(os.path.dirname(conda_prefix))
+    # /cluster/work/climate/dgrund/Miniforge3/envs/pycles
+    # --> /cluster/work/climate/dgrund/Miniforge3
     assert conda_root, "no active conda env"  # SR/TMP
     conda_lib = conda_root + '/lib'
-    conda_include = '/home/dgrund/.conda/envs/' + conda_root + '/include'
+    conda_include = conda_root + '/include'
     library_dirs = [conda_lib]
     #+library_dirs = os.environ['LD_LIBRARY_PATH'].split(':')
     libraries = []
@@ -44,6 +55,7 @@ if conda_root and not  'eu' in platform.node():
     netcdf_include = conda_include
     netcdf_lib = conda_lib
     f_compiler = 'gfortran'
+    
 elif sys.platform == 'darwin':
     #Compile flags for MacOSX
     library_dirs = []
