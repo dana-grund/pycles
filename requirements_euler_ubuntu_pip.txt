@@ -1,0 +1,47 @@
+### Tried before on Ubuntu (no success):
+# cython==0.29.33 # before major update with cython>=3.0.0
+# matplotlib
+# mpi4py
+# netCDF4==1.5.8 # avoid an HDF5 error, https://stackoverflow.com/questions/72821108/hdf5-warnings-when-accessing-xarray-dataset
+# numpy
+# scipy
+
+# # added by DG
+# Bottleneck
+# dask
+# xarray
+
+
+### versions used before on CentOS:
+### could not install exactly the same versions again
+
+# module load openmpi/4.1.4
+# module load gcc/8.2.0
+# module load python/3.10.4
+# module load netcdf/4.9.0
+# module load hdf5/1.10.9
+
+# cython==0.29.33
+# matplotlib==3.7.0
+# mpi4py==3.1.4
+# netCDF4==1.5.8
+# numpy==1.22.4
+# scipy==1.10.0
+
+# Bottleneck==1.3.6
+# dask==2023.2.0
+# xarray==2023.2.0
+
+### versions used before on CentOS:
+### these could be installed and worked on CentOs
+
+cython==0.29.33
+matplotlib==3.7.0
+mpi4py==3.1.4
+netCDF4==1.5.8
+numpy
+scipy
+
+Bottleneck
+dask
+xarray==2023.2.0

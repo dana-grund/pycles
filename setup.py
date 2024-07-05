@@ -67,23 +67,41 @@ elif sys.platform == 'darwin':
     netcdf_include = get_netcdf_include()
     netcdf_lib = os.path.join(get_netcdf_prefix(), 'lib')
     f_compiler = 'gfortran'
+    
 elif 'eu' in platform.node():
-    #Compile flags for euler @ ETHZ (original PyCLES etup from 2016)
-    # library_dirs = ['/cluster/apps/openmpi/1.6.5/x86_64/gcc_4.8.2/lib/']
-    library_dirs = ['/cluster/apps/gcc-4.8.5/openmpi-4.1.4-pu2smponvdeu574nqolsw4rynnagngch/lib']
+    print('Starting compilation without conda on Euler at ETH.')
+
+    ## Compile flags for euler @ ETHZ (CentOS, 2023 - 2024/06, SR and DG)
+    # library_dirs = ['/cluster/apps/gcc-4.8.5/openmpi-4.1.4-pu2smponvdeu574nqolsw4rynnagngch/lib']
+    # netcdf_include = '/cluster/apps/gcc-4.8.5/netcdf-4.9.0-f2lwkfrx5o6b67cl2sv634ba5vmhg3qg/include'
+    # netcdf_lib = '/cluster/apps/gcc-4.8.5/netcdf-4.9.0-f2lwkfrx5o6b67cl2sv634ba5vmhg3qg/lib'
+
+    ## Even older original setup (2016)
+    # netcdf_include = '/cluster/apps/netcdf/4.3.1/x86_64/gcc_4.8.2/openmpi_1.6.5/include'
+    # netcdf_lib = '/cluster/apps/netcdf/4.3.1/x86_64/gcc_4.8.2/openmpi_1.6.5/lib'
+
+    ## Compile flags for euler @ ETHZ (Ubuntu, 2024/07 DG)
+    print('Using setting for Ubuntu on Euler.')
+    library_dirs = ['/cluster/software/stacks/2024-06/spack/opt/spack/linux-ubuntu22.04-x86_64_v3/gcc-12.2.0/openmpi-4.1.6-carqrgaphesqd6gv2ei55htn6sxpngvt/lib']
+    netcdf_include = get_netcdf_include()
+    netcdf_lib = os.path.join(get_netcdf_prefix(), 'lib')
+
+    print(f'[setup.py] {library_dirs=}')
+    print(f'[setup.py] {netcdf_include=}')
+    print(f'[setup.py] {netcdf_lib=}')
+
+    # shared on both OS
     libraries = []
     libraries.append('mpi')
     libraries.append('gfortran')
     extensions = []
     extra_compile_args=[]
     extra_compile_args+=['-std=c99', '-O3', '-march=native', '-Wno-unused',
-                         '-Wno-#warnings', '-Wno-maybe-uninitialized', '-Wno-cpp', '-Wno-array-bounds','-fPIC']
+                         '-Wno-#warnings', '-Wno-maybe-uninitialized', 
+                         '-Wno-cpp', '-Wno-array-bounds','-fPIC']
     extra_objects=['./RRTMG/rrtmg_build/rrtmg_combined.o']
-    netcdf_include = '/cluster/apps/gcc-4.8.5/netcdf-4.9.0-f2lwkfrx5o6b67cl2sv634ba5vmhg3qg/include'
-    # netcdf_include = '/cluster/apps/netcdf/4.3.1/x86_64/gcc_4.8.2/openmpi_1.6.5/include'
-    netcdf_lib = '/cluster/apps/gcc-4.8.5/netcdf-4.9.0-f2lwkfrx5o6b67cl2sv634ba5vmhg3qg/lib'
-    # netcdf_lib = '/cluster/apps/netcdf/4.3.1/x86_64/gcc_4.8.2/openmpi_1.6.5/lib'
     f_compiler = 'gfortran'
+
 elif (platform.machine()  == 'x86_64') and ('LD_LIBRARY_PATH' in os.environ):
     #Compile flags for Central @ Caltech
     library_dirs = os.environ['LD_LIBRARY_PATH'].split(':')

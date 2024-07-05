@@ -12,6 +12,8 @@ Csrc/parameters_micro.h
 *.in
 build/
 *.txt
+!requirements_euler_ubuntu_pip.txt
+!environment_euler_ubuntu_pip.txt
 figs/
 _static/
 _templates/
