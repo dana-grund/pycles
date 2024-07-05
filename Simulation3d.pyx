@@ -59,7 +59,7 @@ class Simulation3d:
         self.Fo = Forcing.Forcing(namelist, self.LH, self.Pa)
         self.Ra = RadiationFactory(namelist,self.LH, self.Pa)
         self.Budg = SurfaceBudgetFactory(namelist)
-        self.StatsIO = NetCDFIO.NetCDFIO_Stats()
+        self.StatsIO = NetCDFIO.NetCDFIO_Stats(namelist, self.Pa)
         self.FieldsIO = NetCDFIO.NetCDFIO_Fields()
         self.CondStatsIO = NetCDFIO.NetCDFIO_CondStats()
         self.Restart = Restart.Restart(namelist, self.Pa)
