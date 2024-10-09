@@ -19,3 +19,6 @@ _static/
 _templates/
 *.png
 *.mod
+
+# experiment output directories
+Out*
