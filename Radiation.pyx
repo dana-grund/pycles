@@ -25,6 +25,7 @@ from thermodynamic_functions cimport cpm_c
 include 'parameters.pxi'
 from profiles import profile_data
 # import matplotlib.pyplot as plt
+import os
 import sys
 
 
@@ -918,7 +919,8 @@ cdef class RadiationRRTM(RadiationBase):
 
 
         # Read in trace gas data
-        lw_input_file = './RRTMG/lw/data/rrtmg_lw.nc'
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        lw_input_file = os.path.join(this_dir,'RRTMG/lw/data/rrtmg_lw.nc')
         lw_gas = nc.Dataset(lw_input_file,  "r")
 
         lw_pressure = np.asarray(lw_gas.variables['Pressure'])
@@ -931,7 +933,8 @@ cdef class RadiationRRTM(RadiationBase):
         # From rad_driver.f90, lines 546 to 552
         trace = np.zeros((9,lw_np),dtype=np.double,order='F')
         for i in xrange(lw_ngas):
-            gas_name = ''.join(lw_gas.variables['AbsorberNames'][i,:])
+            data = lw_gas.variables['AbsorberNames'][i,:]
+            gas_name = ''.join([char.decode('utf-8').strip() for char in data])
             if 'O3' in gas_name:
                 trace[0,:] = lw_absorber[:,i].reshape(1,lw_np)
             elif 'CO2' in gas_name:
