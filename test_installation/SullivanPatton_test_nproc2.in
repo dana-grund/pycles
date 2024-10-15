@@ -35,6 +35,9 @@
         "ny": 128,
         "nz": 128
     },
+    "initialization": {
+        "random_seed_factor": 1
+    },
     "meta": {
         "casename": "SullivanPatton",
         "simname": "SullivanPatton_test_nproc2",
