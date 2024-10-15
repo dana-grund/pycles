@@ -1,0 +1,96 @@
+{
+    "conditional_stats": {
+        "classes": [
+            "Spectra"
+        ],
+        "frequency": 5,
+        "stats_dir": "cond_stats"
+    },
+    "damping": {
+        "Rayleigh": {
+            "gamma_r": 0.02,
+            "z_d": 500.0
+        },
+        "scheme": "Rayleigh"
+    },
+    "diffusion": {
+        "qt_entropy_source": false
+    },
+    "fields_io": {
+        "diagnostic_fields": [
+            "temperature",
+            "buoyancy_frequency",
+            "viscosity"
+        ],
+        "fields_dir": "fields",
+        "frequency": 5
+    },
+    "grid": {
+        "dims": 3,
+        "dx": 40.0,
+        "dy": 40.0,
+        "dz": 16.0,
+        "gw": 3,
+        "nx": 128,
+        "ny": 128,
+        "nz": 128
+    },
+    "meta": {
+        "casename": "SullivanPatton",
+        "simname": "SullivanPatton_test_nproc2",
+        "uuid": "9aec36c1-1492-46df-814c-4354ec17cb96"
+    },
+    "microphysics": {
+        "phase_partitioning": "liquid_only",
+        "scheme": "None_Dry"
+    },
+    "momentum_transport": {
+        "order": 5
+    },
+    "mpi": {
+        "nprocx": 2,
+        "nprocy": 1,
+        "nprocz": 1
+    },
+    "output": {
+        "output_root": "./"
+    },
+    "postprocessing": {
+        "merge_timesteps": true,
+        "collapse_folders": true
+    },
+    "restart": {
+        "frequency": 3600.0,
+        "init_from": false,
+        "input_path": "./",
+        "output": true
+    },
+    "scalar_transport": {
+        "order": 5
+    },
+    "sgs": {
+        "Smagorinsky": {
+            "cs": 0,
+            "prt": 0.3333333333333333
+        },
+        "scheme": "Smagorinsky"
+    },
+    "stats_io": {
+        "auxiliary": [
+            "PBLheight",
+            "Flux"
+        ],
+        "frequency": 5,
+        "stats_dir": "stats"
+    },
+    "thermodynamics": {
+        "latentheat": "constant"
+    },
+    "time_stepping": {
+        "cfl_limit": 0.7,
+        "dt_initial": 10.0,
+        "dt_max": 10.0,
+        "t_max": 20,
+        "ts_type": 3
+    }
+}
