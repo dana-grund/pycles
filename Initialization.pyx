@@ -237,18 +237,10 @@ def InitSaturatedBubble(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVari
 def InitSullivanPatton(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariables PV,
                        ReferenceState.ReferenceState RS, Th, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa, LatentHeat LH ):
 
-    #Generate the reference profiles
-    RS.Pg = 1.0e5  #Pressure at ground
-    RS.Tg = 300.0  #Temperature at ground
-    RS.qtg = 0.0   #Total water mixing ratio at surface
-    RS.u0 = 1.0  # velocities removed in Galilean transformation
-    RS.v0 = 0.0
-
-    RS.initialize(Gr, Th, NS, Pa)
-
     #Fix the random seed used for theta perturbations
     try:
         random_seed_factor = namelist['initialization']['random_seed_factor']
+        Pa.root_print("Using random_seed_factor="+str(random_seed_factor))
     except:
         random_seed_factor = 1
     random_seed = random_seed_factor*(Pa.rank+1)
@@ -271,13 +263,39 @@ def InitSullivanPatton(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVaria
         cdef double [:] theta_pert = rng.random(Gr.dims.npg)
         cdef double theta_pert_
 
+    #Create initial temperature profile
+    try:
+        Tg = namelist['initialization']['theta_profile']['Tg']
+        hi = namelist['initialization']['theta_profile']['hi']
+        zi = namelist['initialization']['theta_profile']['zi']
+        dz_theta_i = namelist['initialization']['theta_profile']['dz_theta_i']
+        dz_theta_e = namelist['initialization']['theta_profile']['dz_theta_e']
+        Pa.root_print("Using specified initial theta profile with values:")
+        Pa.root_print("    Tg="+str(Tg)+", hi="+str(hi)+", zi="+str(zi))
+        Pa.root_print("    dz_theta_i="+str(dz_theta_i)+", dz_theta_e="+str(dz_theta_e))
+    except:
+        Tg = 300.0  # temperature in neutral layer (at ground)
+        hi = 100.0  # height of the inversion
+        zi = 1024.0  # initial inverison height
+        dz_theta_i = 0.08  # inversion lapse rate
+        dz_theta_e = 0.003  # environmental lapse rate
+    bi = zi - hi/2.0  # base of the inversion
+    ti = bi + hi  # top of the inversion
     for k in xrange(Gr.dims.nlg[2]):
-        if Gr.zl_half[k] <=  974.0:
-            theta[k] = 300.0
-        elif Gr.zl_half[k] <= 1074.0:
-            theta[k] = 300.0 + (Gr.zl_half[k] - 974.0) * 0.08
+        if Gr.zl_half[k] <=  bi:
+            theta[k] = Tg
+        elif Gr.zl_half[k] <= ti:
+            theta[k] = Tg + (Gr.zl_half[k] - bi) * dz_theta_i
         else:
-            theta[k] = 308.0 + (Gr.zl_half[k] - 1074.0) * 0.003
+            theta[k] = Tg + hi * dz_theta_i + (Gr.zl_half[k] - ti) * dz_theta_e
+
+    #Generate the reference profiles
+    RS.Pg = 1.0e5  #Pressure at ground
+    RS.Tg = Tg  #Temperature at ground # XXX
+    RS.qtg = 0.0   #Total water mixing ratio at surface
+    RS.u0 = 1.0  # velocities removed in Galilean transformation
+    RS.v0 = 0.0
+    RS.initialize(Gr, Th, NS, Pa)
 
     cdef double [:] p0 = RS.p0_half
 
