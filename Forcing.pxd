@@ -42,6 +42,7 @@ cdef class ForcingBomex:
 
 cdef class ForcingSullivanPatton:
     cdef:
+        double ug_scalar
         double [:] ug
         double [:] vg
         double coriolis_param

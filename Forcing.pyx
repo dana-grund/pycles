@@ -33,7 +33,7 @@ cdef class Forcing:
     def __init__(self, namelist, LatentHeat LH, ParallelMPI.ParallelMPI Pa):
         casename = namelist['meta']['casename']
         if casename == 'SullivanPatton':
-            self.scheme = ForcingSullivanPatton()
+            self.scheme = ForcingSullivanPatton(namelist)
         elif casename == 'Bomex':
             self.scheme = ForcingBomex()
         elif casename == 'Gabls':
@@ -257,14 +257,18 @@ cdef class ForcingBomex:
         return
 
 cdef class ForcingSullivanPatton:
-    def __init__(self):
-
+    def __init__(self, namelist):
+        try:
+            self.ug_scalar = namelist['forcing']['geostrophic_wind']
+        except:
+            self.ug_scalar = 1.0
         return
+
     cpdef initialize(self, Grid.Grid Gr, ReferenceState.ReferenceState RS, Th, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa):
-        self.ug = np.ones(Gr.dims.nlg[2],dtype=np.double, order='c') #m/s
+        Pa.root_print("Using specified geostrophic wind U_g="+str(self.ug_scalar)+" m/s")
+        self.ug = np.ones(Gr.dims.nlg[2],dtype=np.double, order='c') * self.ug_scalar #m/s
         self.vg = np.zeros(Gr.dims.nlg[2],dtype=np.double, order='c')  #m/s
         self.coriolis_param = 1.0e-4 #s^{-1}
-
         NS.add_profile('u_coriolis_tendency', Gr, Pa)
         NS.add_profile('v_coriolis_tendency',Gr, Pa)
         return
