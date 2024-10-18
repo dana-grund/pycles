@@ -47,7 +47,7 @@ def SurfaceFactory(namelist, LatentHeat LH, ParallelMPI.ParallelMPI Par):
 
         casename = namelist['meta']['casename']
         if casename == 'SullivanPatton':
-           return SurfaceSullivanPatton(LH)
+           return SurfaceSullivanPatton(namelist,LH,Par)
         elif casename == 'Bomex':
             return SurfaceBomex(LH)
         elif casename == 'Gabls':
@@ -214,8 +214,13 @@ cdef class SurfaceNone(SurfaceBase):
 
 
 cdef class SurfaceSullivanPatton(SurfaceBase):
-    def __init__(self, LatentHeat LH):
-        self.theta_flux = 0.24 # K m/s
+    def __init__(self, namelist, LatentHeat LH, ParallelMPI.ParallelMPI Pa):
+        # constant surface theta flux is considered a forcing
+        try:
+            self.theta_flux = namelist['forcing']['theta_flux']
+            Pa.root_print("Using specified surface forcing Q_star="+str(self.theta_flux)+" K m s^-1")
+        else:
+            self.theta_flux = 0.24 # K m/s
         self.z0 = 0.1 #m (Roughness length)
         self.gustiness = 0.001 #m/s, minimum surface windspeed for determination of u*
 
