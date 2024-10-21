@@ -219,8 +219,9 @@ cdef class SurfaceSullivanPatton(SurfaceBase):
         try:
             self.theta_flux = namelist['forcing']['theta_flux']
             Pa.root_print("Using specified surface forcing Q_star="+str(self.theta_flux)+" K m s^-1")
-        else:
+        except:
             self.theta_flux = 0.24 # K m/s
+            Pa.root_print("Using default surface forcing Q_star="+str(self.theta_flux)+" K m s^-1")
         self.z0 = 0.1 #m (Roughness length)
         self.gustiness = 0.001 #m/s, minimum surface windspeed for determination of u*
 
