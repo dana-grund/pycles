@@ -507,18 +507,6 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
     :return: None
     """
 
-    # Generate Reference Profiles
-    RS.Pg = 1017.8 * 100.0
-    RS.qtg = 9.0/1000.0
-    RS.u0 = 7.0
-    RS.v0 = -5.5
-
-    # Use an exner function with values for Rd, and cp given in Stevens 2004 to compute temperature given $\theta_l$
-    RS.Tg = 289.0 * (RS.Pg/p_tilde)**(287.0/1015.0)
-
-    RS.initialize(Gr ,Th, NS, Pa)
-
-    #Set up $\tehta_l$ and $\qt$ profiles
     cdef:
         Py_ssize_t i
         Py_ssize_t j
@@ -536,42 +524,59 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
         Py_ssize_t e_varshift
 
         #Defaults for profile constants
-        double zi = 840.0
-        double thetal_0 = 289.0
-        double d_thetal = 8.5 # 297.5 - 289.0
-        double qt_0 = 0.009 # 9.0/1000.0
-        double qt_1 = 0.0015 # 1.5/1000.0
+        double zi
+        double thetal_g
+        double d_thetal
+        double qtg
+        double d_qt
+        double p_surface
 
-    #Set custom profile constants
+    #Defaults and custom inputs
     try:
         zi = namelist['initial']['zi']
     except:
-        pass
+        zi = 840.0
     try:
-        thetal_0 = namelist['initial']['thetal_0']
+        thetal_g = namelist['initial']['thetal_g']
     except:
-        pass
+        thetal_g = 289.0
     try:
         d_thetal = namelist['initial']['d_thetal']
     except:
-        pass
+        d_thetal = 8.5
     try:
-        qt_0 = namelist['initial']['qt_0']
+        qtg = namelist['initial']['qtg']
     except:
-        pass
+        qtg = 0.009
     try:
-        qt_1 = namelist['initial']['qt_1']
+        d_qt = namelist['initial']['d_qt']
     except:
-        pass
+        d_qt = 0.0075 # 0.009 - 0.0015
+    try:
+        p_surface = namelist['surface']['p_surface']
+    except:
+        p_surface = 1017.8e2 # Pa
+    
+    # Generate Reference Profiles
+    RS.Pg = p_surface
+    RS.qtg = qtg
+    RS.u0 = 7.0
+    RS.v0 = -5.5
+
+    # Use an exner function with values for Rd, and cp given in Stevens 2004 to compute temperature given $\theta_l$
+    RS.Tg = thetal_g * (RS.Pg/p_tilde)**(287.0/1015.0)
+
+    RS.initialize(Gr ,Th, NS, Pa)
+
 
     #Set up thetal and qt profiles
     for k in xrange(Gr.dims.nlg[2]):
         if Gr.zl_half[k] <= zi:
-            thetal[k] = thetal_0
-            qt[k] = qt_0
+            thetal[k] = thetal_g
+            qt[k] = qtg
         if Gr.zl_half[k] > zi:
-            thetal[k] = thetal_0 + d_thetal + (Gr.zl_half[k] - zi)**(1.0/3.0)
-            qt[k] = qt_1
+            thetal[k] = thetal_g + d_thetal + (Gr.zl_half[k] - zi)**(1.0/3.0)
+            qt[k] = qtg - d_qt
 
     def compute_thetal(p_,T_,ql_):
         theta_ = T_ / (p_/p_tilde)**(287.0/1015.0)
