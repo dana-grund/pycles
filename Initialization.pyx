@@ -535,13 +535,43 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
         double [:] qt = np.zeros((Gr.dims.nlg[2],),dtype=np.double,order='c')
         Py_ssize_t e_varshift
 
+        #Defaults for profile constants
+        double zi = 840.0
+        double thetal_0 = 289.0
+        double d_thetal = 8.5 # 297.5 - 289.0
+        double qt_0 = 0.009 # 9.0/1000.0
+        double qt_1 = 0.0015 # 1.5/1000.0
+
+    #Set custom profile constants
+    try:
+        zi = namelist['initial']['zi']
+    except:
+        pass
+    try:
+        thetal_0 = namelist['initial']['thetal_0']
+    except:
+        pass
+    try:
+        d_thetal = namelist['initial']['d_thetal']
+    except:
+        pass
+    try:
+        qt_0 = namelist['initial']['qt_0']
+    except:
+        pass
+    try:
+        qt_1 = namelist['initial']['qt_1']
+    except:
+        pass
+
+    #Set up thetal and qt profiles
     for k in xrange(Gr.dims.nlg[2]):
-        if Gr.zl_half[k] <=840.0:
-            thetal[k] = 289.0
-            qt[k] = 9.0/1000.0
-        if Gr.zl_half[k] > 840.0:
-            thetal[k] = 297.5 + (Gr.zl_half[k] - 840.0)**(1.0/3.0)
-            qt[k] = 1.5/1000.0
+        if Gr.zl_half[k] <= zi:
+            thetal[k] = thetal_0
+            qt[k] = qt_0
+        if Gr.zl_half[k] > zi:
+            thetal[k] = thetal_0 + d_thetal + (Gr.zl_half[k] - zi)**(1.0/3.0)
+            qt[k] = qt_1
 
     def compute_thetal(p_,T_,ql_):
         theta_ = T_ / (p_/p_tilde)**(287.0/1015.0)
