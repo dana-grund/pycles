@@ -230,14 +230,28 @@ cdef class RadiationNone(RadiationBase):
 
 cdef class RadiationDyCOMS_RF01(RadiationBase):
     def __init__(self, namelist):
-        self.alpha_z = 1.0
-        self.kap = 85.0
+        #Constants from the radiation scheme in Stevens et al., 2005
         try:
             self.f0 = namelist['radiation']['dycoms_f0']
         except:
             self.f0 = 70.0
-        self.f1 = 22.0
-        self.divergence = 3.75e-6
+        try:
+            self.f1 = namelist['radiation']['dycoms_f1']
+        except:
+            self.f1 = 22.0
+        try:
+            self.alpha_z = namelist['radiation']['dycoms_alpha_z']
+        except:
+            self.alpha_z = 1.0
+        try:
+            self.kap = namelist['radiation']['dycoms_kap']
+        except:
+            self.kap = 85.0
+        #Large-scale divergence
+        try:
+            self.divergence = namelist['forcing']['divergence']
+        except:
+            self.divergence = 3.75e-6
 
         return
 

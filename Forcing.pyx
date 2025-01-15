@@ -39,10 +39,10 @@ cdef class Forcing:
         elif casename == 'Gabls':
             self.scheme = ForcingGabls()
         elif casename == 'DYCOMS_RF01':
-            self.scheme = ForcingDyCOMS_RF01(casename)
+            self.scheme = ForcingDyCOMS_RF01(casename, namelist)
         elif casename == 'DYCOMS_RF02':
             #Forcing for DYCOMS_RF02 is same as DYCOMS_RF01
-            self.scheme = ForcingDyCOMS_RF01(casename)
+            self.scheme = ForcingDyCOMS_RF01(casename, namelist)
         elif casename == 'SMOKE':
             self.scheme = ForcingNone()
         elif casename == 'Rico':
@@ -347,13 +347,27 @@ cdef class ForcingGabls:
 
 
 cdef class ForcingDyCOMS_RF01:
-    def __init__(self,casename):
-        self.divergence = 3.75e-6
-        self.coriolis_param = 2.0 * omega * sin(31.5 * pi / 180.0 )
+    def __init__(self, casename, namelist):
         if casename == 'DYCOMS_RF02':
             self.rf02_flag = True
         else:
             self.rf02_flag = False
+
+        #Large-scale divergence
+        try:
+            self.divergence = namelist['forcing']['divergence']
+        except:
+            self.divergence = 3.75e-6
+        #Geostrophic wind
+        try:
+            self.ug_scalar = namelist['forcing']['ug']
+            self.vg_scalar = namelist['forcing']['vg']
+        except:
+            self.ug_scalar = 7.0
+            self.vg_scalar = -5.5
+
+        #Coriolis force
+        self.coriolis_param = 2.0 * omega * sin(31.5 * pi / 180.0 )
 
         return
 
@@ -376,8 +390,8 @@ cdef class ForcingDyCOMS_RF01:
             with nogil:
                 for k in range(Gr.dims.nlg[2]):
                     self.subsidence[k] = -Gr.zl_half[k] * self.divergence
-                    self.ug[k] = 7.0
-                    self.vg[k] = -5.5
+                    self.ug[k] = self.ug_scalar
+                    self.vg[k] = self.vg_scalar
 
 
         #Initialize Statistical Output
