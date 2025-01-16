@@ -562,12 +562,20 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
         print('[Initialization.pyx] Using custom initial p_surface=',p_surface)
     except:
         p_surface = 1017.8e2 # Pa
-    
+    try:
+        ug = namelist['forcing']['ug']
+        vg = namelist['forcing']['vg']
+        print('[Forcing.pyx] Using ug=',ug)
+        print('[Forcing.pyx] Using vg=',vg)
+    except:
+        ug = 7.0
+        vg = -5.5
+
     # Generate Reference Profiles
     RS.Pg = p_surface
     RS.qtg = qtg
-    RS.u0 = 7.0
-    RS.v0 = -5.5
+    RS.u0 = ug
+    RS.v0 = vg
 
     # Use an exner function with values for Rd, and cp given in Stevens 2004 to compute temperature given $\theta_l$
     RS.Tg = thetal_g * (RS.Pg/p_tilde)**(287.0/1015.0)
