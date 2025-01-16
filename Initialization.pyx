@@ -534,26 +534,32 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
     #Defaults and custom inputs
     try:
         zi = namelist['initial']['zi']
+        print('[Initialization.pyx] Using custom initial zi=',zi)
     except:
         zi = 840.0
     try:
         thetal_g = namelist['initial']['thetal_g']
+        print('[Initialization.pyx] Using custom initial thetal_g=',thetal_g)
     except:
         thetal_g = 289.0
     try:
         d_thetal = namelist['initial']['d_thetal']
+        print('[Initialization.pyx] Using custom initial d_thetal=',d_thetal)
     except:
         d_thetal = 8.5
     try:
         qtg = namelist['initial']['qtg']
+        print('[Initialization.pyx] Using custom initial qtg=',qtg)
     except:
         qtg = 0.009
     try:
         d_qt = namelist['initial']['d_qt']
+        print('[Initialization.pyx] Using custom initial d_qt=',d_qt)
     except:
         d_qt = 0.0075 # 0.009 - 0.0015
     try:
         p_surface = namelist['surface']['p_surface']
+        print('[Initialization.pyx] Using custom initial p_surface=',p_surface)
     except:
         p_surface = 1017.8e2 # Pa
     

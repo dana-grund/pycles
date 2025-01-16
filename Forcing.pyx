@@ -356,12 +356,15 @@ cdef class ForcingDyCOMS_RF01:
         #Large-scale divergence
         try:
             self.divergence = namelist['forcing']['divergence']
+            print('[Forcing.pyx] Using custom divergence=',self.divergence)
         except:
             self.divergence = 3.75e-6
         #Geostrophic wind
         try:
             self.ug_scalar = namelist['forcing']['ug']
             self.vg_scalar = namelist['forcing']['vg']
+            print('[Forcing.pyx] Using vug=',self.ug_scalar)
+            print('[Forcing.pyx] Using custom vg=',self.vg_scalar)
         except:
             self.ug_scalar = 7.0
             self.vg_scalar = -5.5

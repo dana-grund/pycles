@@ -475,33 +475,39 @@ cdef class SurfaceDYCOMS_RF01(SurfaceBase):
     def __init__(self,namelist, LatentHeat LH):
         #Sensible heat flux
         try:
-            self.ft = namelist['surface']['ft'] 
+            self.ft = namelist['surface']['ft']
+            print('[Surface.pyx] Using custom sensible heat flux ft=',self.ft)
         except:
             self.ft = 15.0
         #Latent heat flux
         try:
             self.fq = namelist['surface']['fq']
+            print('[Surface.pyx] Using custom latent heat flux fq=',self.fq)
         except:
             self.fq = 115.0
         #Bulk aerodynamic drag coefficient
         try:
             self.cm = namelist['surface']['cm']
+            print('[Surface.pyx] Using custom drag coefficient cm=',self.cm)
         except:
             self.cm = 0.0011
         #Sea surface temperature
         try:
             self.T_surface = namelist['surface']['sst']
+            print('[Surface.pyx] Using custom sea surface temperature sst=',self.T_surface)
         except:
             self.T_surface = 292.5 # K
         sst = self.T_surface
         #Surface pressure
         try:
             p_surface = namelist['surface']['p_surface']
+            print('[Surface.pyx] Using custom surface pressure p_surface=',p_surface)
         except:
             p_surface = 1017.8e2 # Pa
         #Density of air at the surface
         try:
             density_surface = namelist['surface']['density_surface']
+            print('[Surface.pyx] Using custom surface density density_surface=',density_surface)
         except:
             density_surface = 1.22 #kg/m^3
 
