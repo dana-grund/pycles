@@ -520,8 +520,9 @@ cdef class SurfaceDYCOMS_RF01(SurfaceBase):
         theta_surface = sst/exner(p_surface)
 
         #Derive qt_surface from sst and p_surface, assuming saturation
-        es = 0.611 * 10 ** (7.5*(sst-273.15) / ((sst-273.15) + 237.3)) #Teten's formula
-        r = eps_v * es / (p_surface - es) #Mixing ration
+        sst_c = sst-273.15
+        es = 0.611 * 10 ** (7.5*sst_c / (sst_c + 237.3)) #Teten's formula, kPa
+        r = eps_v * es / (p_surface/1000 - es) #Mixing ratio (pressures in kPa)
         qt_surface = r / (1.0 + r) #Specific humidity
 
         theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(p_surface))
