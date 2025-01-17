@@ -22,3 +22,7 @@ _templates/
 
 # experiment output directories
 Out*
+
+# compilation
+!test_installation/DYCOMS_RF01_test_nproc4.in
+!compile_pycles_slurm_script.sh
