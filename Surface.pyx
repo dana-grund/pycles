@@ -492,44 +492,16 @@ cdef class SurfaceDYCOMS_RF01(SurfaceBase):
         except:
             self.cm = 0.0011
         #Sea surface temperature
+        #(only used by Radiation RRTM, updated in SurfaceBudget)
         try:
             self.sst = namelist['surface']['sst']
-            print('[Surface.pyx] Using custom sea surface temperature sst=',sst)
+            print('[Surface.pyx] Using custom sea surface temperature sst=',self.sst)
         except:
             self.sst = 292.5 # K
-        #Surface pressure
-        try:
-            p_surface = namelist['surface']['p_surface']
-            print('[Surface.pyx] Using custom surface pressure p_surface=',p_surface)
-        except:
-            p_surface = 1017.8e2 # Pa
-        #Density of air at the surface
-        try:
-            density_surface = namelist['surface']['density_surface']
-            print('[Surface.pyx] Using custom surface density density_surface=',density_surface)
-        except:
-            density_surface = 1.22 #kg/m^3
 
-        #Constant quantities
         self.L_fp = LH.L_fp
         self.Lambda_fp = LH.Lambda_fp
         self.gustiness = 0.0
-
-        #Derived surface quantities
-        theta_surface = self.sst/exner(p_surface)
-
-        #Derive qt_surface from sst and p_surface, assuming saturation
-        #This was previously fixed to qt_surface = 13.84e-3 # qs(self.sst) using Teten's formula
-        sst_c = self.sst-273.15
-        es = 0.611 * 10 ** (7.5*sst_c / (sst_c + 237.3)) #Teten's formula, kPa
-        r = eps_v * es / (p_surface/1000 - es) #Mixing ratio (pressures in kPa)
-        qt_surface = r / (1.0 + r) #Specific humidity
-
-        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(p_surface))
-        qt_flux_ = self.fq/self.L_fp(self.sst,self.Lambda_fp(self.sst))
-        self.buoyancy_flux = g * ((theta_flux + (eps_vi-1.0)*(theta_surface*qt_flux_ + qt_surface * theta_flux))
-                              /(theta_surface*(1.0 + (eps_vi-1)*qt_surface)))
-
         self.dry_case = False
 
     cpdef initialize(self, Grid.Grid Gr, ReferenceState.ReferenceState Ref, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa):
