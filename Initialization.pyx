@@ -526,9 +526,9 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
         #Defaults for profile constants
         double zi
         double thetal_g
-        double d_thetal
+        double thetal_1
         double qtg
-        double d_qt
+        double qt_1
         double p_surface
 
     #Defaults and custom inputs
@@ -543,20 +543,20 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
     except:
         thetal_g = 289.0
     try:
-        d_thetal = namelist['initial']['d_thetal']
-        print('[Initialization.pyx] Using custom initial d_thetal=',d_thetal)
+        thetal_1 = namelist['initial']['thetal_1']
+        print('[Initialization.pyx] Using custom initial thetal_1=',thetal_1)
     except:
-        d_thetal = 8.5
+        thetal_1 = 297.5
     try:
         qtg = namelist['initial']['qtg']
         print('[Initialization.pyx] Using custom initial qtg=',qtg)
     except:
         qtg = 0.009
     try:
-        d_qt = namelist['initial']['d_qt']
-        print('[Initialization.pyx] Using custom initial d_qt=',d_qt)
+        qt_1 = namelist['initial']['qt_1']
+        print('[Initialization.pyx] Using custom initial qt_1=',qt_1)
     except:
-        d_qt = 0.0075 # 0.009 - 0.0015
+        qt_1 = 0.0075 # 0.009 - 0.0015
     try:
         p_surface = namelist['surface']['p_surface']
         print('[Initialization.pyx] Using custom initial p_surface=',p_surface)
@@ -589,8 +589,8 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
             thetal[k] = thetal_g
             qt[k] = qtg
         if Gr.zl_half[k] > zi:
-            thetal[k] = thetal_g + d_thetal + (Gr.zl_half[k] - zi)**(1.0/3.0)
-            qt[k] = qtg - d_qt
+            thetal[k] = thetal_1 + (Gr.zl_half[k] - zi)**(1.0/3.0)
+            qt[k] = qt_1
 
     def compute_thetal(p_,T_,ql_):
         theta_ = T_ / (p_/p_tilde)**(287.0/1015.0)
