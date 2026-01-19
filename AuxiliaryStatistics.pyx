@@ -894,18 +894,15 @@ class PBLheightStatistics: ### structure from SmokeStats
             Py_ssize_t i, j, k, ij, ij2d, ijk
             Py_ssize_t istride = Gr.dims.nlg[1] * Gr.dims.nlg[2]
             Py_ssize_t jstride = Gr.dims.nlg[2]
-            # no z stride I guess as it is the last dimension?
-            Py_ssize_t T_shift = DV.get_varshift(Gr, 'temperature') ### XXX ?
+            Py_ssize_t T_shift = DV.get_varshift(Gr, 'temperature')
 
-            #### using nlg instead of n: has to do with mpi, Grid.compute_local_dims()
-
-            double [:] blh_field = np.zeros(Gr.dims.nlg[0]*Gr.dims.nlg[1], dtype=np.double, order='c') # flattened field in x,y
-            double blh # final result
+            double [:] blh_field = np.zeros(Gr.dims.nlg[0]*Gr.dims.nlg[1], dtype=np.double, order='c')
+            double blh
 
             double height_threshold = 600 # [m] consider only heights above
             double dz = Gr.dims.dx[2]
             
-            # tempraries
+            # temporaries
             double T1
             double T2 
             double dz_T
@@ -917,47 +914,35 @@ class PBLheightStatistics: ### structure from SmokeStats
                     ij = i * istride + j * jstride
                     ij2d = i * Gr.dims.nlg[1] + j
                     
-                    # # central difference: field in x,y,z
-                    # for iz in range(1,nz-1):
+                    #Compute vertical temperature gradient (lapse rate) by central differences
                     for k in xrange(Gr.dims.nlg[2]):
-                        ijk = ij + k # used to index in DV
+                        ijk = ij + k
                         height = Gr.zl_half[k]
 
-                        # # single differences at extremes
-                        if k == 0: # forward diff
-                            # dzT[0] = (T[1] - T[0])/dz
+                        if k == 0:
                             T1 = DV.values[T_shift + ijk]
                             T2 = DV.values[T_shift + ijk+1]
                             dz_T = (T2 - T1) / dz
 
-                        elif k == Gr.dims.nlg[2] - 1: # backward diff
-                            # dzT[-1] = (T[-1] - T[-2])/dz
+                        elif k == Gr.dims.nlg[2] - 1:
                             T1 = DV.values[T_shift + ijk-1]
                             T2 = DV.values[T_shift + ijk]
                             dz_T = (T2 - T1) / dz
 
-                        else: # central diff
-                            # dzT[iz] = (T[iz+1] - T[iz-1])/(2*dz)
+                        else:
                             T1 = DV.values[T_shift + ijk-1]
                             T2 = DV.values[T_shift + ijk+1]
                             dz_T = (T2 - T1) / (2*dz)
-
-
-                        # # zi field in x,y
-                        # zi_xy = dzT.argmax('z')* dz
-                        if dz_T > blh_field[ij2d]: # argmax_z for every x,y, init 0
-                            
-                            # # only average maxima over height_threshold [m] height (avoid local maxima at ground)
-                            # zi_xy = zi_xy.where(zi_xy > height_threshold) 
+                        
+                        #Find height of largest lapse rate
+                        if dz_T > blh_field[ij2d]:
                             if height > height_threshold:
+                                blh_field[ij2d] = Gr.zl_half[k]
 
-                                blh_field[ij2d] = Gr.zl_half[k] # height
+        #Take horizonal domain mean
+        blh = Pa.HorizontalMeanSurface(Gr, &blh_field[0])
 
-        # # scalar zi
-        # zi = zi_xy.mean('x', skipna=True).mean('y', skipna=True)
-        blh = Pa.HorizontalMeanSurface(Gr, &blh_field[0]) # XXX why [0] ? 
-
-        NS.write_ts('boundary_layer_height', blh, Pa) # ts = time series: append one value
+        NS.write_ts('boundary_layer_height', blh, Pa)
 
         return
 

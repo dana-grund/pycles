@@ -22,3 +22,11 @@ _templates/
 
 # experiment output directories
 Out*
+
+# slurm
+*.out
+*.err
+
+# test compilation
+!test_installation/Straka93_test_nproc2.in
+!test_installation/SullivanPatton_test_nproc2.in

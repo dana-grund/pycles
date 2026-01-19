@@ -237,18 +237,17 @@ def InitSaturatedBubble(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVari
 def InitSullivanPatton(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariables PV,
                        ReferenceState.ReferenceState RS, Th, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa, LatentHeat LH ):
 
-    #Generate the reference profiles
-    RS.Pg = 1.0e5  #Pressure at ground
-    RS.Tg = 300.0  #Temperature at ground
-    RS.qtg = 0.0   #Total water mixing ratio at surface
-    RS.u0 = 1.0  # velocities removed in Galilean transformation
-    RS.v0 = 0.0
+    #Fix the random seed used for theta perturbations
+    try:
+        random_seed_factor = namelist['initialization']['random_seed_factor']
+        Pa.root_print("Using random_seed_factor="+str(random_seed_factor))
+    except:
+        random_seed_factor = 1
+    random_seed = random_seed_factor*(Pa.rank+1)
+    rng = np.random.default_rng(random_seed)
 
-    RS.initialize(Gr, Th, NS, Pa)
-
-    #Get the variable number for each of the velocity components
-    np.random.seed(Pa.rank)
     cdef:
+        #Get the variable number for each of the velocity components
         Py_ssize_t u_varshift = PV.get_varshift(Gr,'u')
         Py_ssize_t v_varshift = PV.get_varshift(Gr,'v')
         Py_ssize_t w_varshift = PV.get_varshift(Gr,'w')
@@ -256,20 +255,61 @@ def InitSullivanPatton(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVaria
         Py_ssize_t i,j,k
         Py_ssize_t ishift, jshift, e_varshift
         Py_ssize_t ijk
+
         double [:] theta = np.empty((Gr.dims.nlg[2]),dtype=np.double,order='c')
         double t
 
         #Generate initial perturbations (here we are generating more than we need)
-        cdef double [:] theta_pert = np.random.random_sample(Gr.dims.npg)
+        cdef double [:] theta_pert = rng.random(Gr.dims.npg)
         cdef double theta_pert_
 
+    #Create initial temperature profile
+    try:
+        Tg = namelist['initialization']['theta_profile']['Tg']
+        zi = namelist['initialization']['theta_profile']['zi']
+        dz_theta_i = namelist['initialization']['theta_profile']['dz_theta_i']
+        Pa.root_print("Using specified initial theta profile with values:")
+        Pa.root_print("    Tg="+str(Tg)+", zi="+str(zi)+", dz_theta_i="+str(dz_theta_i))
+    except:
+        Tg = 300.0  # temperature in neutral layer (at ground)
+        zi = 1024.0  # initial inverison height
+        dz_theta_i = 0.08  # inversion lapse rate
+
+    #Fix environmental profile from SullivanPatton2011: T_env(1074m) = 308K
+    dz_theta_e = 0.003  # environmental lapse rate
+    fix = 1074  # m 
+    Te_at_fix = 308  # K
+    b = Te_at_fix - dz_theta_e * fix  # m # Te(z) = dz_theta_e * z + b
+
+    #Infer profile shape from linear constraints
+    # za: height of inversion base (T=Ta=Tg)
+    # zb: height of inversion top
+    # Tb: Temeperature at inversion top
+    
+    # inversion height: zb = 2*zi - za
+    # inversion top meets the environmental profile: Tb = T(zb)= dz_theta_e * zb + b
+    # inversion lapse rate, base meets Tg: (zb - za) * dz_theta_i = Tb - Tg
+
+    za = (2*zi*(dz_theta_e-dz_theta_i)+b-Tg) / (dz_theta_e-2*dz_theta_i)
+    zb = 2*zi - za
+    Tb = Tg + dz_theta_i * (zb - za) # = dz_theta_e * zb + b
+
+    #Compute the profile
     for k in xrange(Gr.dims.nlg[2]):
-        if Gr.zl_half[k] <=  974.0:
-            theta[k] = 300.0
-        elif Gr.zl_half[k] <= 1074.0:
-            theta[k] = 300.0 + (Gr.zl_half[k] - 974.0) * 0.08
+        if Gr.zl_half[k] <=  za:
+            theta[k] = Tg
+        elif Gr.zl_half[k] <= zb:
+            theta[k] = Tg + (Gr.zl_half[k] - za) * dz_theta_i
         else:
-            theta[k] = 308.0 + (Gr.zl_half[k] - 1074.0) * 0.003
+            theta[k] = Tb + (Gr.zl_half[k] - zb) * dz_theta_e
+
+    #Generate the reference profiles
+    RS.Pg = 1.0e5  #Pressure at ground
+    RS.Tg = Tg  #Temperature at ground
+    RS.qtg = 0.0   #Total water mixing ratio at surface
+    RS.u0 = 1.0  # velocities removed in Galilean transformation
+    RS.v0 = 0.0
+    RS.initialize(Gr, Th, NS, Pa)
 
     cdef double [:] p0 = RS.p0_half
 
@@ -319,6 +359,11 @@ def InitBomex(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariables PV,
         random_seed_factor = 1
 
     np.random.seed(Pa.rank * random_seed_factor)
+    # comment DG 2024-10: 
+    # This ensures different seeds are used on different ranks.
+    # However, it does not work for generating different realizations of the same
+    # test case, since Pa.rank = 0 for all cases leads to seed = 0.
+    # Fix: (Pa.rank + 1) * random_seed_factor (see SullivanPatton)
 
     #Get the variable number for each of the velocity components
 
