@@ -565,13 +565,15 @@ def DYCOMS_RF01():
     namelist['conditional_stats']['frequency'] = 600.0
     namelist['conditional_stats']['stats_dir'] = 'cond_stats'
 
-
     namelist['visualization'] = {}
     namelist['visualization']['frequency'] = 1e6
 
     namelist['meta'] = {}
     namelist['meta']['simname'] = 'DYCOMS_RF01'
     namelist['meta']['casename'] = 'DYCOMS_RF01'
+
+    namelist['initialization'] = {}
+    namelist['initialization']['random_seed_factor'] = 1
 
     return namelist
 

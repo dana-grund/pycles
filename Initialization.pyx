@@ -507,18 +507,6 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
     :return: None
     """
 
-    # Generate Reference Profiles
-    RS.Pg = 1017.8 * 100.0
-    RS.qtg = 9.0/1000.0
-    RS.u0 = 7.0
-    RS.v0 = -5.5
-
-    # Use an exner function with values for Rd, and cp given in Stevens 2004 to compute temperature given $\theta_l$
-    RS.Tg = 289.0 * (RS.Pg/p_tilde)**(287.0/1015.0)
-
-    RS.initialize(Gr ,Th, NS, Pa)
-
-    #Set up $\tehta_l$ and $\qt$ profiles
     cdef:
         Py_ssize_t i
         Py_ssize_t j
@@ -535,13 +523,79 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
         double [:] qt = np.zeros((Gr.dims.nlg[2],),dtype=np.double,order='c')
         Py_ssize_t e_varshift
 
+        #Defaults for profile constants
+        double zi
+        double thetal_g
+        double thetal_1
+        double qtg
+        double qt_1
+        double p_surface
+
+    #Defaults and custom inputs
+    try:
+        zi = namelist['initial']['zi']
+        print('[Initialization.pyx] Using custom initial zi=',zi)
+    except:
+        zi = 840.0
+    try:
+        thetal_g = namelist['initial']['thetal_g']
+        print('[Initialization.pyx] Using custom initial thetal_g=',thetal_g)
+    except:
+        thetal_g = 289.0
+    try:
+        thetal_1 = namelist['initial']['thetal_1']
+        print('[Initialization.pyx] Using custom initial thetal_1=',thetal_1)
+    except:
+        thetal_1 = 297.5
+    try:
+        qtg = namelist['initial']['qtg']
+        print('[Initialization.pyx] Using custom initial qtg=',qtg)
+    except:
+        qtg = 0.009
+    try:
+        qt_1 = namelist['initial']['qt_1']
+        print('[Initialization.pyx] Using custom initial qt_1=',qt_1)
+    except:
+        qt_1 = 0.0075 # 0.009 - 0.0015
+    try:
+        p_surface = namelist['surface']['p_surface']
+        print('[Initialization.pyx] Using custom initial p_surface=',p_surface)
+    except:
+        p_surface = 1017.8e2 # Pa
+    try:
+        ug = namelist['forcing']['ug']
+        vg = namelist['forcing']['vg']
+        print('[Forcing.pyx] Using ug=',ug)
+        print('[Forcing.pyx] Using vg=',vg)
+    except:
+        ug = 7.0
+        vg = -5.5
+    try:
+        random_seed_factor = namelist['initialization']['random_seed_factor']
+        Pa.root_print("Using random_seed_factor="+str(random_seed_factor))
+    except:
+        random_seed_factor = 1
+
+    # Generate Reference Profiles
+    RS.Pg = p_surface
+    RS.qtg = qtg
+    RS.u0 = ug
+    RS.v0 = vg
+
+    # Use an exner function with values for Rd, and cp given in Stevens 2004 to compute temperature given $\theta_l$
+    RS.Tg = thetal_g * (RS.Pg/p_tilde)**(287.0/1015.0)
+
+    RS.initialize(Gr ,Th, NS, Pa)
+
+
+    #Set up thetal and qt profiles
     for k in xrange(Gr.dims.nlg[2]):
-        if Gr.zl_half[k] <=840.0:
-            thetal[k] = 289.0
-            qt[k] = 9.0/1000.0
-        if Gr.zl_half[k] > 840.0:
-            thetal[k] = 297.5 + (Gr.zl_half[k] - 840.0)**(1.0/3.0)
-            qt[k] = 1.5/1000.0
+        if Gr.zl_half[k] <= zi:
+            thetal[k] = thetal_g
+            qt[k] = qtg
+        if Gr.zl_half[k] > zi:
+            thetal[k] = thetal_1 + (Gr.zl_half[k] - zi)**(1.0/3.0)
+            qt[k] = qt_1
 
     def compute_thetal(p_,T_,ql_):
         theta_ = T_ / (p_/p_tilde)**(287.0/1015.0)
@@ -586,9 +640,12 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
 
             return t_2, ql_2
 
+    #Fix the random seed used for theta perturbations
+    random_seed = random_seed_factor*(Pa.rank+1)
+    rng = np.random.default_rng(random_seed)
+
     #Generate initial perturbations (here we are generating more than we need)
-    np.random.seed(Pa.rank)
-    cdef double [:] theta_pert = np.random.random_sample(Gr.dims.npg)
+    cdef double [:] theta_pert = rng.random(Gr.dims.npg)
     cdef double theta_pert_
 
     for i in xrange(Gr.dims.nlg[0]):

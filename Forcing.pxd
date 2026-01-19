@@ -66,6 +66,8 @@ cdef class ForcingGabls:
 
 cdef class ForcingDyCOMS_RF01:
     cdef:
+        double ug_scalar
+        double vg_scalar
         double [:] ug
         double [:] vg
         double divergence

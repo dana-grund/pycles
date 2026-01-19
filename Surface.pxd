@@ -89,6 +89,7 @@ cdef class SurfaceDYCOMS_RF01(SurfaceBase):
         double ft
         double fq
         double cm
+        double sst
         double buoyancy_flux
         double gustiness
         double [:] windspeed

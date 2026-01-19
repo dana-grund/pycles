@@ -25,6 +25,7 @@ from thermodynamic_functions cimport cpm_c
 include 'parameters.pxi'
 from profiles import profile_data
 # import matplotlib.pyplot as plt
+import os
 import sys
 
 
@@ -229,14 +230,28 @@ cdef class RadiationNone(RadiationBase):
 
 cdef class RadiationDyCOMS_RF01(RadiationBase):
     def __init__(self, namelist):
-        self.alpha_z = 1.0
-        self.kap = 85.0
+        #Constants from the radiation scheme in Stevens et al., 2005
         try:
             self.f0 = namelist['radiation']['dycoms_f0']
         except:
             self.f0 = 70.0
-        self.f1 = 22.0
-        self.divergence = 3.75e-6
+        try:
+            self.f1 = namelist['radiation']['dycoms_f1']
+        except:
+            self.f1 = 22.0
+        try:
+            self.alpha_z = namelist['radiation']['dycoms_alpha_z']
+        except:
+            self.alpha_z = 1.0
+        try:
+            self.kap = namelist['radiation']['dycoms_kap']
+        except:
+            self.kap = 85.0
+        #Large-scale divergence
+        try:
+            self.divergence = namelist['forcing']['divergence']
+        except:
+            self.divergence = 3.75e-6
 
         return
 
@@ -918,7 +933,8 @@ cdef class RadiationRRTM(RadiationBase):
 
 
         # Read in trace gas data
-        lw_input_file = './RRTMG/lw/data/rrtmg_lw.nc'
+        this_dir = os.path.dirname(os.path.realpath(__file__))
+        lw_input_file = os.path.join(this_dir,'RRTMG/lw/data/rrtmg_lw.nc')
         lw_gas = nc.Dataset(lw_input_file,  "r")
 
         lw_pressure = np.asarray(lw_gas.variables['Pressure'])
@@ -931,7 +947,8 @@ cdef class RadiationRRTM(RadiationBase):
         # From rad_driver.f90, lines 546 to 552
         trace = np.zeros((9,lw_np),dtype=np.double,order='F')
         for i in xrange(lw_ngas):
-            gas_name = ''.join(lw_gas.variables['AbsorberNames'][i,:])
+            data = lw_gas.variables['AbsorberNames'][i,:]
+            gas_name = ''.join([char.decode('utf-8').strip() for char in data])
             if 'O3' in gas_name:
                 trace[0,:] = lw_absorber[:,i].reshape(1,lw_np)
             elif 'CO2' in gas_name:

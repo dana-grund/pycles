@@ -473,28 +473,41 @@ cdef class SurfaceGabls(SurfaceBase):
 
 cdef class SurfaceDYCOMS_RF01(SurfaceBase):
     def __init__(self,namelist, LatentHeat LH):
-        self.ft = 15.0
-        self.fq = 115.0
-        self.gustiness = 0.0
-        self.cm = 0.0011
+        #Sensible heat flux
+        try:
+            self.ft = namelist['surface']['ft']
+            print('[Surface.pyx] Using custom sensible heat flux ft=',self.ft)
+        except:
+            self.ft = 15.0
+        #Latent heat flux
+        try:
+            self.fq = namelist['surface']['fq']
+            print('[Surface.pyx] Using custom latent heat flux fq=',self.fq)
+        except:
+            self.fq = 115.0
+        #Bulk aerodynamic drag coefficient
+        try:
+            self.cm = namelist['surface']['cm']
+            print('[Surface.pyx] Using custom drag coefficient cm=',self.cm)
+        except:
+            self.cm = 0.0011
+        #Sea surface temperature
+        #(only used by Radiation RRTM, updated in SurfaceBudget)
+        try:
+            self.sst = namelist['surface']['sst']
+            print('[Surface.pyx] Using custom sea surface temperature sst=',self.sst)
+        except:
+            self.sst = 292.5 # K
+
         self.L_fp = LH.L_fp
         self.Lambda_fp = LH.Lambda_fp
-        sst = 292.5 # K
-        psurface = 1017.8e2 # Pa
-        theta_surface = sst/exner(psurface)
-        qt_surface = 13.84e-3 # qs(sst) using Teten's formula
-        density_surface = 1.22 #kg/m^3
-        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(psurface))
-        qt_flux_ = self.fq/self.L_fp(sst,self.Lambda_fp(sst))
-        self.buoyancy_flux = g * ((theta_flux + (eps_vi-1.0)*(theta_surface*qt_flux_ + qt_surface * theta_flux))
-                              /(theta_surface*(1.0 + (eps_vi-1)*qt_surface)))
-
+        self.gustiness = 0.0
         self.dry_case = False
 
     cpdef initialize(self, Grid.Grid Gr, ReferenceState.ReferenceState Ref, NetCDFIO_Stats NS, ParallelMPI.ParallelMPI Pa):
         SurfaceBase.initialize(self,Gr,Ref,NS,Pa)
         self.windspeed = np.zeros(Gr.dims.nlg[0]*Gr.dims.nlg[1], dtype=np.double, order='c')
-        self.T_surface = 292.5
+        self.T_surface = self.sst # avoid strange bug when setting self.T_surface in the constructor (surface instability)
 
         return
 
@@ -543,7 +556,7 @@ cdef class SurfaceDYCOMS_RF01(SurfaceBase):
                     pd = pd_c(Ref.p0_half[gw], PV.values[ijk + qt_shift], PV.values[ijk + qt_shift] - DV.values[ijk + ql_shift])
                     sv = sv_c(pv,DV.values[t_shift+ijk])
                     sd = sd_c(pd,DV.values[t_shift+ijk])
-                    self.qt_flux[ij] = self.fq / lv / 1.22
+                    self.qt_flux[ij] = Ref.alpha0_half[gw] * self.fq / lv
                     self.s_flux[ij] = Ref.alpha0_half[gw] * (self.ft/DV.values[t_shift+ijk] + self.fq*(sv - sd)/lv)
             for i in xrange(gw, imax-gw):
                 for j in xrange(gw, jmax-gw):
@@ -570,11 +583,11 @@ cdef class SurfaceDYCOMS_RF02(SurfaceBase):
         self.L_fp = LH.L_fp
         self.Lambda_fp = LH.Lambda_fp
         sst = 292.5 # K
-        psurface = 1017.8e2 # Pa
-        theta_surface = sst/exner(psurface)
+        p_surface = 1017.8e2 # Pa
+        theta_surface = sst/exner(p_surface)
         qt_surface = 13.84e-3 # qs(sst) using Teten's formula
         density_surface = 1.22 #kg/m^3
-        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(psurface))
+        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(p_surface))
         qt_flux_ = self.fq/self.L_fp(sst,self.Lambda_fp(sst))
         self.buoyancy_flux = g * ((theta_flux + (eps_vi-1.0)*(theta_surface*qt_flux_ + qt_surface * theta_flux))
                               /(theta_surface*(1.0 + (eps_vi-1)*qt_surface)))
@@ -1143,11 +1156,11 @@ cdef class SurfaceMpace(SurfaceBase):
         self.L_fp = LH.L_fp
         self.Lambda_fp = LH.Lambda_fp
         sst = 274.01 # K
-        psurface = 1010.e2 # Pa
-        theta_surface = sst/exner(psurface)
+        p_surface = 1010.e2 # Pa
+        theta_surface = sst/exner(p_surface)
         qt_surface = 0.00402 # qs(sst) from RS calculation
         density_surface = 1.28 #kg/m^3
-        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(psurface))
+        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(p_surface))
         qt_flux_ = self.fq/self.L_fp(sst,self.Lambda_fp(sst))
         self.buoyancy_flux = g * ((theta_flux + (eps_vi-1.0)*(theta_surface*qt_flux_ + qt_surface * theta_flux))
                               /(theta_surface*(1.0 + (eps_vi-1)*qt_surface)))
@@ -1234,11 +1247,11 @@ cdef class SurfaceSheba(SurfaceBase):
         self.L_fp = LH.L_fp
         self.Lambda_fp = LH.Lambda_fp
         sst = 257.4 # K
-        psurface = 101700.0 # Pa
-        theta_surface = sst/exner(psurface)
+        p_surface = 101700.0 # Pa
+        theta_surface = sst/exner(p_surface)
         qt_surface = 0.001107 # qs(sst) from RS calculation
         density_surface = 1.38 #kg/m^3
-        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(psurface))
+        theta_flux = self.ft/(density_surface*cpm(qt_surface)*exner(p_surface))
         qt_flux_ = self.fq/self.L_fp(sst,self.Lambda_fp(sst))
         self.buoyancy_flux = g * ((theta_flux + (eps_vi-1.0)*(theta_surface*qt_flux_ + qt_surface * theta_flux))
                               /(theta_surface*(1.0 + (eps_vi-1)*qt_surface)))

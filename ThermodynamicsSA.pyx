@@ -47,7 +47,7 @@ cdef extern from "entropies.h":
 cdef class ThermodynamicsSA:
     def __init__(self, dict namelist, LatentHeat LH, ParallelMPI.ParallelMPI Par):
         '''
-        Init method saturation adjsutment thermodynamics.
+        Init method saturation adjustment thermodynamics.
 
         :param namelist: dictionary
         :param LH: LatentHeat class instance
@@ -128,6 +128,8 @@ cdef class ThermodynamicsSA:
         NS.add_ts('cloud_fraction', Gr, Pa)
         NS.add_ts('cloud_top', Gr, Pa)
         NS.add_ts('cloud_base', Gr, Pa)
+        NS.add_ts('cloud_top_mean', Gr, Pa)
+        NS.add_ts('cloud_base_mean', Gr, Pa)
         NS.add_ts('lwp', Gr, Pa)
 
 
@@ -417,6 +419,11 @@ cdef class ThermodynamicsSA:
             double[:] ci
             double cb
             double ct
+            double cbm
+            double ctm
+            double count
+            double height_threshold = 200 # [m] consider only cloud top/bottom above
+
             # Weighted sum of local cloud indicator
             double ci_weighted_sum = 0.0
             double mean_divisor = np.double(Gr.dims.n[0] * Gr.dims.n[1])
@@ -459,19 +466,50 @@ cdef class ThermodynamicsSA:
         NS.write_ts('cloud_fraction', ci_weighted_sum, Pa)
 
         # Compute cloud top and cloud base height
+        # cb, ct: computed as domain-min/max of local cloud base/top
         cb = 99999.9
         ct = -99999.9
+
+        # cbm, ctm: computed as mean of local cloud base/top
+        cbm = 0.0
+        ctm = 0.0
+        count = 0
+
         with nogil:
             for pi in xrange(z_pencil.n_local_pencils):
+
+                # for each xy location, get min/max height of cloud
+                cb_col = 99999.9
+                ct_col = -99999.9
                 for k in xrange(kmin, kmax):
                     if ql_pencils[pi, k] > 0.0:
-                        cb = fmin(cb, Gr.z_half[gw + k])
-                        ct = fmax(ct, Gr.z_half[gw + k])
+                        
+                        #Disregard liquid water at surface
+                        if Gr.z_half[gw + k] > height_threshold:
+                            # min/max: total domain
+                            cb = fmin(cb, Gr.z_half[gw + k])
+                            ct = fmax(ct, Gr.z_half[gw + k])
+
+                            # mean: per col
+                            cb_col = fmin(cb_col, Gr.z_half[gw + k])
+                            ct_col = fmax(ct_col, Gr.z_half[gw + k])
+                
+                # mean: count number of columns with cloud
+                if cb_col < 99999.9:
+                    count += 1.0
+                    cbm += cb_col
+                    ctm += ct_col
 
         cb = Pa.domain_scalar_min(cb)
         ct = Pa.domain_scalar_max(ct)
+        cbm = Pa.domain_scalar_sum(cbm / count) / Pa.size
+        ctm = Pa.domain_scalar_sum(ctm / count) / Pa.size
+
         NS.write_ts('cloud_base', cb, Pa)
         NS.write_ts('cloud_top', ct, Pa)
+        NS.write_ts('cloud_base_mean', cbm, Pa)
+        NS.write_ts('cloud_top_mean', ctm, Pa)
+
 
         # Compute liquid water path
         lwp = np.empty((z_pencil.n_local_pencils), dtype=np.double, order='c')
