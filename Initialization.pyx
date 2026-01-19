@@ -570,6 +570,11 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
     except:
         ug = 7.0
         vg = -5.5
+    try:
+        random_seed_factor = namelist['initialization']['random_seed_factor']
+        Pa.root_print("Using random_seed_factor="+str(random_seed_factor))
+    except:
+        random_seed_factor = 1
 
     # Generate Reference Profiles
     RS.Pg = p_surface
@@ -635,9 +640,12 @@ def InitDYCOMS_RF01(namelist,Grid.Grid Gr,PrognosticVariables.PrognosticVariable
 
             return t_2, ql_2
 
+    #Fix the random seed used for theta perturbations
+    random_seed = random_seed_factor*(Pa.rank+1)
+    rng = np.random.default_rng(random_seed)
+
     #Generate initial perturbations (here we are generating more than we need)
-    np.random.seed(Pa.rank)
-    cdef double [:] theta_pert = np.random.random_sample(Gr.dims.npg)
+    cdef double [:] theta_pert = rng.random(Gr.dims.npg)
     cdef double theta_pert_
 
     for i in xrange(Gr.dims.nlg[0]):
